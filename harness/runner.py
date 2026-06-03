@@ -67,6 +67,12 @@ class RunEntry:
     stats: Stats
     throughput_rows_per_s: float
     iters_ns: list[int]
+    # compression-quality extension (standalone string codecs only)
+    codec: str | None = None
+    compress_ns: int | None = None
+    compressed_bytes: int | None = None
+    decompress_random_ns: int | None = None
+    compression_ratio: float | None = None
 
 
 @dataclass
@@ -106,6 +112,9 @@ def aggregate(iters_ns: list[int], warmup: int) -> Stats:
 def _group_of(fmt: str, pushdown: bool) -> str:
     if fmt == "parquet":
         return "baseline"
+    if fmt == "raw":
+        # Standalone string codecs: compressed storage, decompress-then-scan.
+        return "codec"
     return "treatment" if pushdown else "control"
 
 
@@ -161,6 +170,7 @@ def run_job(job: Job, repo_root: Path, *, warmup: int, measured: int) -> RunEntr
         "--output",
         "json",
     ]
+    args.extend(job.binary.extra_args())
     if job.explain:
         args.append("--explain")
 
@@ -205,6 +215,15 @@ def run_job(job: Job, repo_root: Path, *, warmup: int, measured: int) -> RunEntr
         stats=stats,
         throughput_rows_per_s=throughput,
         iters_ns=res.iters_ns,
+        codec=res.codec,
+        compress_ns=res.compress_ns,
+        compressed_bytes=res.compressed_bytes,
+        decompress_random_ns=res.decompress_random_ns,
+        compression_ratio=(
+            res.in_memory_bytes / res.compressed_bytes
+            if res.compressed_bytes
+            else None
+        ),
     )
 
 

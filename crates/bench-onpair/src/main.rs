@@ -151,7 +151,8 @@ fn main() -> Result<()> {
         result_rows,
         result_checksum: checksum(result_rows),
         file_bytes: bench_core::file_bytes(&args.input),
-        in_memory_bytes: compressed_bytes,
+        // Uncompressed payload size, so `ratio = in_memory_bytes/compressed_bytes`.
+        in_memory_bytes: col.total_bytes(),
         load_ns,
         decompress_ns,
         pushdown: false,

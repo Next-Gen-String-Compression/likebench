@@ -143,7 +143,8 @@ int main(int argc, char **argv) {
         out.result_rows = result_rows;
         out.result_checksum = checksum(result_rows);
         out.file_bytes = file_size(input);
-        out.in_memory_bytes = compressed_bytes;
+        // Uncompressed payload size, so ratio = in_memory_bytes / compressed_bytes.
+        out.in_memory_bytes = col.total_bytes();
         out.load_ns = load_ns;
         out.decompress_ns = decompress_ns;
         out.pushdown = false;

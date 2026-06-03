@@ -52,27 +52,42 @@ log "cargo: $(cargo --version)"
 #    We let the harness decide which crates are enabled so this stays in sync.
 # ---------------------------------------------------------------------------
 log "building enabled rust binaries (cargo build --release) ..."
+# `convert` is the compression tool the harness always needs; the rest come from
+# the manifest. For rows that share one binary via `bin`, the cargo *package* is
+# the basename of that path (e.g. bench-onpair16 -> bench-onpair), so we dedupe
+# on package name rather than the logical row name.
 mapfile -t CRATES < <(uv run python -c "
+from pathlib import Path
 from harness.manifest import load_manifest
+pkgs = {'convert'}
 for b in load_manifest('benchmarks.toml'):
     if b.enabled and b.lang == 'rust':
-        print(b.name)
+        pkgs.add(Path(b.bin).name if b.bin else b.name)
+for p in sorted(pkgs):
+    print(p)
 ")
 
-if [ "${#CRATES[@]}" -eq 0 ]; then
-  log "no enabled rust binaries; skipping cargo build"
-else
-  PKG_ARGS=()
-  for c in "${CRATES[@]}"; do PKG_ARGS+=(-p "$c"); done
-  log "packages: ${CRATES[*]}"
-  cargo build --release "${PKG_ARGS[@]}"
-fi
+PKG_ARGS=()
+for c in "${CRATES[@]}"; do PKG_ARGS+=(-p "$c"); done
+log "packages: ${CRATES[*]}"
+cargo build --release "${PKG_ARGS[@]}"
 
 # ---------------------------------------------------------------------------
-# 5. (Later) C++ binaries: cmake + a C++17 compiler.
-#    Uncomment once cpp/ binaries exist.
+# 5. C++ binaries (bench-compress-cpp: FSST/FSST12/Dictionary/LZ4). Built when
+#    the manifest has any enabled C++ engine and a compiler toolchain exists.
 # ---------------------------------------------------------------------------
-# if ! have cmake; then echo "install cmake + a C++17 compiler"; fi
-# cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release && cmake --build cpp/build -j
+HAVE_CPP="$(uv run python -c "
+from harness.manifest import load_manifest
+print(any(b.enabled and b.lang == 'cpp' for b in load_manifest('benchmarks.toml')))
+")"
+if [ "$HAVE_CPP" = "True" ]; then
+  if have cmake && (have g++ || have clang++); then
+    log "building C++ engines (cmake) ..."
+    cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release
+    cmake --build cpp/build -j
+  else
+    log "WARNING: enabled C++ engines but cmake/g++ missing; skipping. Install cmake + a C++20 compiler."
+  fi
+fi
 
 log "done. Run the benchmark with:  python run.py   (or: uv run python run.py)"

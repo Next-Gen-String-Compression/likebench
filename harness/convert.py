@@ -44,9 +44,40 @@ class ColumnInputs:
 
     parquet: Path
     vortex: Path
+    strings: Path | None = None
 
     def for_format(self, fmt: str) -> Path:
-        return self.parquet if fmt == "parquet" else self.vortex
+        if fmt == "parquet":
+            return self.parquet
+        if fmt == "raw":
+            assert self.strings is not None, "raw format requested but no .strings file"
+            return self.strings
+        return self.vortex
+
+
+def write_strings_file(path: Path, values: list[str]) -> None:
+    """Write a column as the dependency-free STRZ `.strings` interchange file.
+
+    Byte-identical to ``bench_core::strings`` / ``cpp/common/strings_file.hpp``.
+    Nulls are materialized as empty strings so the row count matches the
+    Parquet/Vortex engines (empty strings never match a non-empty predicate).
+    """
+    import struct
+
+    import numpy as np
+
+    blobs = [v.encode("utf-8") for v in values]
+    lengths = np.fromiter((len(b) for b in blobs), dtype="<u8", count=len(blobs))
+    offsets = np.zeros(len(blobs) + 1, dtype="<u8")
+    np.cumsum(lengths, out=offsets[1:])
+    data = b"".join(blobs)
+    with path.open("wb") as fh:
+        fh.write(b"STRZ")
+        fh.write(struct.pack("<I", 1))
+        fh.write(struct.pack("<Q", len(blobs)))
+        fh.write(struct.pack("<Q", len(data)))
+        fh.write(offsets.tobytes())
+        fh.write(data)
 
 
 def _run_convert(convert_bin: Path, args: list[str]) -> dict:
@@ -80,15 +111,27 @@ def build_columns(
         raw = cols_dir / f"{col}.raw.parquet"
         pq = cols_dir / f"{col}.parquet"
         vx = cols_dir / f"{col}.vortex"
-        inputs[col] = ColumnInputs(parquet=pq, vortex=vx)
+        st = cols_dir / f"{col}.strings"
+        inputs[col] = ColumnInputs(parquet=pq, vortex=vx, strings=st)
 
-        if not force and pq.exists() and vx.exists():
+        if not force and pq.exists() and vx.exists() and st.exists():
             # Reuse; reconstruct metrics from the sidecar if present.
             side = cols_dir / f"{col}.metrics.json"
             if side.exists():
                 for m in json.loads(side.read_text()):
                     metrics.append(ConvertMetrics(**{**m, "path": Path(m["path"])}))
             continue
+
+        # The dependency-free `.strings` column read by the standalone string
+        # codecs (bench-compress-cpp, bench-onpair).
+        col_values = (
+            pl.scan_parquet(source_parquet)
+            .select(pl.col(col).cast(pl.Utf8).fill_null(""))
+            .collect()
+            .to_series()
+            .to_list()
+        )
+        write_strings_file(st, col_values)
 
         # 1. Project the single column into a carrier Parquet (snappy: cheap,
         #    just a transport into the convert binary).

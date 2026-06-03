@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 VALID_MODES = {"in-mem", "full-query"}
-VALID_FORMATS = {"parquet", "vortex"}
+VALID_FORMATS = {"parquet", "vortex", "raw"}
 VALID_KINDS = {"synthetic", "real"}
 VALID_LANGS = {"rust", "cpp"}
 
@@ -27,6 +27,13 @@ class Binary:
     formats: tuple[str, ...]
     kinds: tuple[str, ...]
     enabled: bool = True
+    # Optional explicit path to the executable, relative to the repo root. When
+    # set it overrides the lang-based default, letting several manifest rows
+    # share one physical binary (each selecting a different ``codec``).
+    bin: str | None = None
+    # Optional codec selector passed through as ``--codec <codec>``. Used by the
+    # standalone string-codec binaries (bench-compress-cpp, bench-onpair).
+    codec: str | None = None
 
     def supports(self, *, mode: str, fmt: str, kind: str) -> bool:
         return mode in self.modes and fmt in self.formats and kind in self.kinds
@@ -34,12 +41,18 @@ class Binary:
     def binary_path(self, repo_root: Path, *, profile: str = "release") -> Path:
         """Path to the built executable.
 
-        Rust binaries land in the workspace ``target/<profile>/<name>``. C++
-        binaries are expected at ``<bin_path>/build/<name>``.
+        An explicit ``bin`` wins. Otherwise Rust binaries land in the workspace
+        ``target/<profile>/<name>`` and C++ binaries at ``<bin_path>/build/<name>``.
         """
+        if self.bin:
+            return repo_root / self.bin
         if self.lang == "rust":
             return repo_root / "target" / profile / self.name
         return repo_root / self.bin_path / "build" / self.name
+
+    def extra_args(self) -> list[str]:
+        """Per-row CLI flags appended after the standard arguments."""
+        return ["--codec", self.codec] if self.codec else []
 
 
 def _require(cond: bool, msg: str) -> None:
@@ -73,12 +86,14 @@ def load_manifest(path: str | Path) -> list[Binary]:
         binaries.append(
             Binary(
                 name=name,
-                bin_path=row["bin_path"],
+                bin_path=row.get("bin_path", ""),
                 lang=lang,
                 modes=modes,
                 formats=formats,
                 kinds=kinds,
                 enabled=bool(row.get("enabled", True)),
+                bin=row.get("bin"),
+                codec=row.get("codec"),
             )
         )
     return binaries

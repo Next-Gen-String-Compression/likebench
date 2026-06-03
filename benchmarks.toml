@@ -47,7 +47,75 @@ kinds = ["synthetic", "real"]
 # (multi-minute) DuckDB C++ build and the runtime vortex community extension.
 enabled = false
 
-# ---- C++ binaries (later) -- same contract, just lang = "cpp" --------------
+# ---- Standalone string codecs ----------------------------------------------
+# These engines compress the raw column themselves (no Parquet/Vortex) and read
+# the dependency-free `.strings` file (`formats = ["raw"]`). Several rows share
+# one physical binary via `bin` + `codec`. They decode + run the synthetic
+# matcher, so their result_rows/checksum join the cross-engine correctness gate,
+# and they additionally report compression ratio + encode/decode speed.
+
+# -- bench-onpair (Rust): SpiralDB-adjacent OnPair, the author's onpair_rs port.
+[[binary]]
+name = "bench-onpair"
+bin = "target/release/bench-onpair"
+lang = "rust"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "onpair"
+
+[[binary]]
+name = "bench-onpair16"
+bin = "target/release/bench-onpair"
+lang = "rust"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "onpair16"
+
+# -- bench-compress-cpp (C++): FSST / FSST12 / Dictionary / LZ4, ported from
+#    CompressionBenchmark. One physical binary, codec selected per row.
+[[binary]]
+name = "bench-fsst"
+bin = "cpp/build/bench-compress-cpp"
+bin_path = "cpp"
+lang = "cpp"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "fsst"
+
+[[binary]]
+name = "bench-fsst12"
+bin = "cpp/build/bench-compress-cpp"
+bin_path = "cpp"
+lang = "cpp"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "fsst12"
+
+[[binary]]
+name = "bench-dictionary"
+bin = "cpp/build/bench-compress-cpp"
+bin_path = "cpp"
+lang = "cpp"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "dictionary"
+
+[[binary]]
+name = "bench-lz4"
+bin = "cpp/build/bench-compress-cpp"
+bin_path = "cpp"
+lang = "cpp"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "lz4"
+
+# ---- C++ query engines (later) -- same contract, lang = "cpp" --------------
 # [[binary]]
 # name = "bench-duckdb-native"
 # bin_path = "cpp/bench-duckdb-native"
@@ -55,13 +123,4 @@ enabled = false
 # modes = ["in-mem", "full-query"]
 # formats = ["parquet", "vortex"]
 # kinds = ["synthetic", "real"]
-# enabled = false
-#
-# [[binary]]
-# name = "bench-baseline"
-# bin_path = "cpp/bench-baseline"
-# lang = "cpp"
-# modes = ["in-mem"]
-# formats = ["parquet"]
-# kinds = ["synthetic"]
 # enabled = false

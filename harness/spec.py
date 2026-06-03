@@ -125,10 +125,20 @@ class RunResult:
     plan: str
     iters_ns: list[int]
     raw: dict[str, Any]
+    # compression-quality extension (only the standalone string codecs set these)
+    codec: str | None = None
+    compress_ns: int | None = None
+    compressed_bytes: int | None = None
+    decompress_random_ns: int | None = None
 
     @staticmethod
     def from_json(text: str) -> "RunResult":
         d = json.loads(text)
+
+        def _opt_int(key: str) -> int | None:
+            v = d.get(key)
+            return int(v) if v is not None else None
+
         return RunResult(
             engine=d["engine"],
             format=d["format"],
@@ -147,4 +157,8 @@ class RunResult:
             plan=str(d.get("plan", "")),
             iters_ns=[int(x) for x in d["iters_ns"]],
             raw=d,
+            codec=d.get("codec"),
+            compress_ns=_opt_int("compress_ns"),
+            compressed_bytes=_opt_int("compressed_bytes"),
+            decompress_random_ns=_opt_int("decompress_random_ns"),
         )
