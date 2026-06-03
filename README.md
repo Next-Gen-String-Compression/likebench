@@ -163,6 +163,34 @@ convert --input <path> --input-format auto|csv|json|parquet \
 | `sample` | one real ClickBench partition | ~1M | ~150 MB | default, quick real run |
 | `full`   | full ClickBench `hits` | ~100M | ~14 GB | paper numbers |
 
+## Datasets
+
+ClickBench is the default, but likebench can benchmark **arbitrary string data**
+— the analogue of CompressionBenchmark pointing at any DuckDB database. Pick a
+source with `--dataset`; string columns are auto-discovered unless `--columns`
+is given (the likebench version of scanning `information_schema` for VARCHAR
+columns).
+
+| `--dataset` | source | columns |
+|---|---|---|
+| `clickbench` (default) | ClickBench `hits` (see Scales) | `URL Title Referer SearchPhrase` |
+| `parquet:<path\|url>` | any Parquet file | auto-discovered Utf8 columns |
+| `duckdb:<path>[#table]` | a DuckDB database (richest VARCHAR table, or `#table`) | its VARCHAR columns |
+| `hf:<repo>[#shard]` | a HuggingFace dataset (datasets-server Parquet) | auto-discovered |
+| `imdb` | alias for `hf:stanfordnlp/imdb#train` | `text` |
+
+```bash
+python run.py --dataset duckdb:/data/imdb.duckdb            # all VARCHAR cols
+python run.py --dataset duckdb:/data/tpch.duckdb#lineitem --columns l_comment
+python run.py --dataset hf:stanfordnlp/imdb --formats raw --engines bench-fsst bench-onpair
+python run.py --dataset parquet:/data/logs.parquet --columns auto
+```
+
+`--scale {nano,sample}` head-caps generic sources for a quick run; `full` uses
+everything. The `duckdb:` source needs the optional `duckdb` package
+(`uv sync --extra duckdb`). TPC-H and Kaggle are just DuckDB files you point at
+with `duckdb:<path>` — exactly CompressionBenchmark's workflow.
+
 ## Extending: add an engine in two steps
 
 1. Drop a crate under `crates/<name>` (or `cpp/<name>`) that honours the CLI/JSON

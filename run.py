@@ -19,20 +19,39 @@ from pathlib import Path
 
 from harness import convert as convert_mod
 from harness import data as data_mod
-from harness import mine_queries, plots, runner
+from harness import datasets, mine_queries, plots, runner
 from harness.manifest import enabled_binaries
 from harness.spec import STRING_COLUMNS
 
 REPO_ROOT = Path(__file__).resolve().parent
 
 
+def _requested_columns(columns: list[str] | None) -> tuple[str, ...] | None:
+    """``None``/``['auto']`` means auto-discover; otherwise the explicit list."""
+    if not columns or (len(columns) == 1 and columns[0] == "auto"):
+        return None
+    return tuple(columns)
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="ClickBench LIKE-pushdown benchmark")
     p.add_argument("--scale", choices=data_mod.SCALES, default="sample")
+    p.add_argument(
+        "--dataset",
+        default="clickbench",
+        help="clickbench | parquet:<path|url> | duckdb:<path> | hf:<repo> "
+        "(non-clickbench datasets auto-discover string columns unless --columns is given)",
+    )
     p.add_argument("--engines", nargs="*", default=None, help="subset of manifest names")
     p.add_argument("--modes", nargs="*", default=None, choices=["in-mem", "full-query"])
-    p.add_argument("--formats", nargs="*", default=None, choices=["parquet", "vortex"])
-    p.add_argument("--columns", nargs="*", default=list(STRING_COLUMNS))
+    p.add_argument("--formats", nargs="*", default=None, choices=["parquet", "vortex", "raw"])
+    p.add_argument(
+        "--columns",
+        nargs="*",
+        default=None,
+        help="string columns to benchmark; omit (or 'auto') to discover them. "
+        "Defaults to the ClickBench string columns for --dataset clickbench.",
+    )
     p.add_argument("--warmup", type=int, default=3)
     p.add_argument("--measure", type=int, default=10)
     p.add_argument("--seed", type=int, default=data_mod.DEFAULT_SEED)
@@ -113,7 +132,7 @@ def build_metadata(args: argparse.Namespace, source: data_mod.SourceData) -> dic
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
-    columns = tuple(args.columns)
+    requested_columns = _requested_columns(args.columns)
     results_dir = args.results_dir
     results_dir.mkdir(parents=True, exist_ok=True)
 
@@ -133,9 +152,19 @@ def main(argv: list[str]) -> int:
         print(f"error: {convert_bin} not built. Run ./setup.sh first.", file=sys.stderr)
         return 2
 
-    print(f"== dataset: clickbench/{args.scale} ==")
-    source = data_mod.prepare(args.cache_dir, args.scale, seed=args.seed)
+    print(f"== dataset: {args.dataset}/{args.scale} ==")
+    resolved = datasets.resolve(
+        args.dataset,
+        args.cache_dir,
+        scale=args.scale,
+        seed=args.seed,
+        columns=requested_columns,
+    )
+    source = resolved.source
+    columns = resolved.columns
+    args.columns = list(columns)  # so build_metadata records the resolved columns
     print(f"   {source.parquet_path}  ({source.rows:,} rows)")
+    print(f"   string columns: {', '.join(columns)}")
 
     print("== convert: per-column Parquet + Vortex ==")
     cols_dir = source.parquet_path.parent / "cols"

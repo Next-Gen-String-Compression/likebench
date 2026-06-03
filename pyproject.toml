@@ -15,6 +15,10 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.6",
 ]
+# Needed only for `--dataset duckdb:<path>` (export VARCHAR columns to Parquet).
+duckdb = [
+    "duckdb>=1.1",
+]
 
 # This is an application, not a library. We only use the [project] table so
 # `uv sync` can build a locked, reproducible virtual environment. There is no

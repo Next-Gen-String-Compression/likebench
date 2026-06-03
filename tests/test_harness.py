@@ -232,3 +232,27 @@ def test_end_to_end_two_engines(tmp_path):
     runner.write_tables(tmp_path / "t.md", tmp_path / "t.csv", entries)
     assert (tmp_path / "results.json").exists()
     assert (tmp_path / "t.csv").exists()
+
+
+def test_dataset_generic_parquet_autodiscovers_string_columns(tmp_path):
+    """A generic Parquet source discovers exactly its string columns; clickbench
+    keeps its fixed columns. Offline (reuses the generated nano parquet)."""
+    from harness import datasets
+
+    # clickbench resolves to the fixed ClickBench string columns.
+    cb = datasets.resolve("clickbench", tmp_path / "cb", scale="nano", seed=3, columns=None)
+    assert cb.columns == ("URL", "Title", "Referer", "SearchPhrase")
+
+    # The same parquet, treated as an arbitrary source, auto-discovers the Utf8
+    # columns (and excludes the integer WatchID/CounterID).
+    src = data_mod.prepare(tmp_path / "cb", "nano", seed=3)
+    generic = datasets.resolve(
+        f"parquet:{src.parquet_path}", tmp_path / "g", scale="nano", seed=3, columns=None
+    )
+    assert set(generic.columns) == {"URL", "Title", "Referer", "SearchPhrase"}
+
+    # Explicit columns override discovery.
+    one = datasets.resolve(
+        f"parquet:{src.parquet_path}", tmp_path / "g2", scale="nano", seed=3, columns=("URL",)
+    )
+    assert one.columns == ("URL",)
