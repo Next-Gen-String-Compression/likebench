@@ -1,0 +1,26 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+
+# C++
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+
+# Build dirs
+/build/
+CMakeCache.txt
+CMakeFiles/
+compile_commands.json
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
