@@ -81,7 +81,7 @@ likebench/
     bench-arrow/            decode -> Arrow -> strongest scan kernel (decompressed baseline)
     bench-datafusion/       DataFusion + vortex-datafusion (pushdown vs parquet)
     bench-duckdb/           duckdb crate + LOAD vortex (heavy; disabled by default)
-  cpp/                      later: bench-duckdb-native, bench-baseline
+  cpp/                      bench-compress-cpp (FSST/FSST12/Dictionary/LZ4); later: bench-duckdb-native
   queries/clickbench.json   mined synthetic specs + real ClickBench LIKE SQL
   data/cache/               downloaded + converted artifacts (gitignored)
   results/                  results.json, table.md, table.csv, metadata.json, plots/
@@ -177,6 +177,26 @@ Deterministic seeded mining, pinned Rust/Python deps, `cargo build --release`.
 `run.py` records machine info, engine/crate versions, and the dataset hash into
 `results/metadata.json`. End to end: `./setup.sh && python run.py`.
 
+## Standalone string codecs (`--format raw`)
+
+Beyond the query engines, likebench benchmarks *raw string-compression schemes*
+ported from CompressionBenchmark. These engines don't read Parquet/Vortex; they
+read a dependency-free `.strings` column (the STRZ interchange file, a direct
+port of CompressionBenchmark's `StringCollector`: offsets + concatenated bytes,
+emitted per column by `convert.py`). Each one compresses the column itself, then
+for every iteration **decodes + runs the synthetic matcher** — so its
+`result_rows`/`result_checksum` join the same cross-engine correctness gate as
+the Vortex/Arrow engines — while additionally reporting compression ratio and
+encode/decode speed. They form the **`codec` group**: a "compressed storage +
+decompress-then-scan" control for the pushdown thesis.
+
+* **`bench-compress-cpp`** (C++) — one binary, codec via `--codec`: `fsst`,
+  `fsst12`, `dictionary`, `lz4`. DuckDB/Arrow-free; vendors fsst, fsst12, lz4,
+  robin_hood, nlohmann/json under `cpp/external/`.
+* **`bench-onpair`** (Rust) — SpiralDB-adjacent OnPair (`onpair_rs`, the
+  algorithm author's port): `--codec onpair | onpair16`. Tuned for random
+  access, so it also reports `decompress_random_ns` (point-access latency).
+
 ## Engine status
 
 | binary | lang | status |
@@ -184,8 +204,9 @@ Deterministic seeded mining, pinned Rust/Python deps, `cargo build --release`.
 | `bench-arrow` | Rust | implemented (decompressed baseline) |
 | `bench-datafusion` | Rust | implemented (DataFusion + vortex-datafusion) |
 | `bench-duckdb` | Rust | implemented; disabled by default (heavy native build + runtime `vortex` community extension) |
+| `bench-compress-cpp` | C++ | implemented (FSST, FSST12, Dictionary, LZ4 — `--format raw`) |
+| `bench-onpair` | Rust | implemented (OnPair / OnPair16 — `--format raw`) |
 | `bench-duckdb-native` | C++ | planned |
-| `bench-baseline` | C++ | planned (hand-rolled FSST decode + `memmem`) |
 
 > **Heads up for reviewers running this:** the `full` scale needs ~14 GB of disk
 > for the download plus the Vortex/Parquet re-encodings. `bench-datafusion`
