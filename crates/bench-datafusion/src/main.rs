@@ -75,6 +75,7 @@ async fn run(args: BenchArgs) -> Result<()> {
         pushdown: outcome.pushdown,
         plan: outcome.plan,
         iters_ns: outcome.iters_ns,
+        ..Default::default()
     };
     out.print()
 }

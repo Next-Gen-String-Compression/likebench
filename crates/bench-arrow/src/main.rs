@@ -155,6 +155,7 @@ fn main() -> Result<()> {
         pushdown: false,
         plan: format!("ArrowScan[{}] memmem/starts_with (decompressed)", synth.op),
         iters_ns,
+        ..Default::default()
     };
     out.print()
 }

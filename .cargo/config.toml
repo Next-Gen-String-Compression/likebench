@@ -1,0 +1,6 @@
+# Benchmarks should exploit the host CPU. `target-cpu=native` also satisfies the
+# AES/SSE2 intrinsics required by `gxhash` (pulled in transitively by OnPair's
+# `ptr_hash` dependency) and unlocks FSST/Vortex SIMD paths. If you need a
+# portable build, override with `RUSTFLAGS="-C target-feature=+aes,+sse2"`.
+[build]
+rustflags = ["-C", "target-cpu=native"]

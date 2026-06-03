@@ -6,6 +6,7 @@ members = [
     "crates/bench-arrow",
     "crates/bench-datafusion",
     "crates/bench-duckdb",
+    "crates/bench-onpair",
 ]
 
 [workspace.package]

@@ -49,6 +49,11 @@ pub struct BenchArgs {
     #[arg(long, default_value_t = false)]
     pub explain: bool,
 
+    /// Codec selector for the standalone string-codec binaries (e.g. `fsst`,
+    /// `onpair16`). Ignored by the query-engine binaries.
+    #[arg(long, default_value = None)]
+    pub codec: Option<String>,
+
     /// Output format. Only `json` is supported.
     #[arg(long, default_value = "json")]
     pub output: String,
@@ -74,6 +79,10 @@ impl BenchArgs {
 pub enum Format {
     Parquet,
     Vortex,
+    /// The dependency-free `.strings` interchange file (see [`strings`]). Used by
+    /// the standalone string-codec binaries (`bench-compress-cpp`, `bench-onpair`)
+    /// that compress raw bytes themselves rather than reading Parquet/Vortex.
+    Raw,
 }
 
 impl std::str::FromStr for Format {
@@ -82,7 +91,8 @@ impl std::str::FromStr for Format {
         match s {
             "parquet" => Ok(Format::Parquet),
             "vortex" => Ok(Format::Vortex),
-            other => bail!("unknown --format {other:?} (expected parquet|vortex)"),
+            "raw" | "strings" => Ok(Format::Raw),
+            other => bail!("unknown --format {other:?} (expected parquet|vortex|raw)"),
         }
     }
 }
@@ -92,6 +102,7 @@ impl Format {
         match self {
             Format::Parquet => "parquet",
             Format::Vortex => "vortex",
+            Format::Raw => "raw",
         }
     }
 }
@@ -413,7 +424,7 @@ pub fn synthetic_to_sql(spec: &SyntheticSpec, table: &str) -> Result<String> {
 // ---------------------------------------------------------------------------
 
 /// The single JSON object every engine prints to stdout.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct BenchOutput {
     pub engine: String,
     pub format: String,
@@ -431,6 +442,22 @@ pub struct BenchOutput {
     pub pushdown: bool,
     pub plan: String,
     pub iters_ns: Vec<u64>,
+
+    // ---- compression-quality extension (optional; only the standalone string
+    // codec binaries populate these). Older engines omit them entirely, so the
+    // JSON shape stays backwards compatible. ----
+    /// Which codec produced these numbers (e.g. "fsst", "onpair16").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codec: Option<String>,
+    /// Nanoseconds to compress the whole column once.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compress_ns: Option<u64>,
+    /// Total compressed footprint in bytes (codes + dictionary + lengths).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compressed_bytes: Option<u64>,
+    /// Nanoseconds to decode N random single rows (point-access workload).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decompress_random_ns: Option<u64>,
 }
 
 impl BenchOutput {
@@ -468,6 +495,113 @@ impl Timer {
 /// Return the file size in bytes (0 if it cannot be stat'd).
 pub fn file_bytes(path: &std::path::Path) -> u64 {
     std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)
+}
+
+// ---------------------------------------------------------------------------
+// `.strings` interchange format
+// ---------------------------------------------------------------------------
+
+/// The dependency-free column interchange used by the standalone string codecs.
+///
+/// A direct port of CompressionBenchmark's `StringCollector` layout, so a C++
+/// and a Rust codec see byte-identical input. On-disk layout (all little-endian):
+///
+/// ```text
+///   magic   : b"STRZ"          (4 bytes)
+///   version : u32 = 1          (4 bytes)
+///   n        : u64             number of strings
+///   nbytes   : u64             total payload bytes
+///   offsets  : (n+1) * u64     offsets[0]=0, offsets[n]=nbytes
+///   data     : nbytes          concatenated UTF-8 payloads (nulls -> empty)
+/// ```
+pub mod strings {
+    use super::{Context, Result};
+    use std::path::Path;
+
+    const MAGIC: &[u8; 4] = b"STRZ";
+    const VERSION: u32 = 1;
+
+    /// An owned, decoded column: concatenated bytes plus `n+1` offsets.
+    pub struct StringColumn {
+        pub data: Vec<u8>,
+        pub offsets: Vec<u64>,
+    }
+
+    impl StringColumn {
+        pub fn len(&self) -> usize {
+            self.offsets.len().saturating_sub(1)
+        }
+        pub fn is_empty(&self) -> bool {
+            self.len() == 0
+        }
+        pub fn total_bytes(&self) -> u64 {
+            *self.offsets.last().unwrap_or(&0)
+        }
+        /// The i-th value as bytes.
+        #[inline]
+        pub fn bytes(&self, i: usize) -> &[u8] {
+            let (a, b) = (self.offsets[i] as usize, self.offsets[i + 1] as usize);
+            &self.data[a..b]
+        }
+        /// The i-th value as `&str` (payloads are written as valid UTF-8).
+        #[inline]
+        pub fn get(&self, i: usize) -> &str {
+            // SAFETY-equivalent: payloads come from UTF-8 sources; fall back lossily
+            // only on malformed input rather than panicking the whole run.
+            std::str::from_utf8(self.bytes(i)).unwrap_or("")
+        }
+    }
+
+    /// Read a `.strings` file written by [`write`] (or the Python harness).
+    pub fn read(path: &Path) -> Result<StringColumn> {
+        let buf = std::fs::read(path).with_context(|| format!("read strings file {path:?}"))?;
+        if buf.len() < 24 || &buf[0..4] != MAGIC {
+            anyhow::bail!("{path:?} is not a STRZ strings file");
+        }
+        let version = u32::from_le_bytes(buf[4..8].try_into().unwrap());
+        if version != VERSION {
+            anyhow::bail!("unsupported STRZ version {version}");
+        }
+        let n = u64::from_le_bytes(buf[8..16].try_into().unwrap()) as usize;
+        let nbytes = u64::from_le_bytes(buf[16..24].try_into().unwrap()) as usize;
+        let off_start = 24usize;
+        let off_end = off_start + (n + 1) * 8;
+        if buf.len() < off_end + nbytes {
+            anyhow::bail!("{path:?} truncated: header promises more than file holds");
+        }
+        let mut offsets = Vec::with_capacity(n + 1);
+        for k in 0..=n {
+            let s = off_start + k * 8;
+            offsets.push(u64::from_le_bytes(buf[s..s + 8].try_into().unwrap()));
+        }
+        let data = buf[off_end..off_end + nbytes].to_vec();
+        Ok(StringColumn { data, offsets })
+    }
+
+    /// Write a `.strings` file from any iterator of byte slices.
+    pub fn write<'a, I>(path: &Path, values: I) -> Result<()>
+    where
+        I: IntoIterator<Item = &'a [u8]>,
+    {
+        let mut data: Vec<u8> = Vec::new();
+        let mut offsets: Vec<u64> = vec![0];
+        for v in values {
+            data.extend_from_slice(v);
+            offsets.push(data.len() as u64);
+        }
+        let n = (offsets.len() - 1) as u64;
+        let mut out: Vec<u8> = Vec::with_capacity(24 + offsets.len() * 8 + data.len());
+        out.extend_from_slice(MAGIC);
+        out.extend_from_slice(&VERSION.to_le_bytes());
+        out.extend_from_slice(&n.to_le_bytes());
+        out.extend_from_slice(&(data.len() as u64).to_le_bytes());
+        for o in &offsets {
+            out.extend_from_slice(&o.to_le_bytes());
+        }
+        out.extend_from_slice(&data);
+        std::fs::write(path, &out).with_context(|| format!("write strings file {path:?}"))?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

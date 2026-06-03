@@ -93,6 +93,7 @@ fn main() -> Result<()> {
             plan.lines().next().unwrap_or("")
         ),
         iters_ns,
+        ..Default::default()
     };
     out.print()
 }
