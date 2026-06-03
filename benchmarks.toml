@@ -1,0 +1,67 @@
+# Engine manifest. One [[binary]] row per engine.
+#
+# This is the ONLY place the Python harness learns about engines. Adding an
+# engine = drop a crate directory + add a row here. Zero Python changes.
+#
+# Fields:
+#   name      logical engine name, also the cargo package name and the produced
+#             binary name (crates/<name> -> target/release/<name>).
+#   bin_path  path to the crate (Cargo) or build dir, relative to repo root.
+#   lang      "rust" | "cpp"  (informational; how setup.sh builds it)
+#   modes     subset of ["in-mem", "full-query"] the binary supports
+#   formats   subset of ["parquet", "vortex"] the binary supports
+#   kinds     subset of ["synthetic", "real"] query kinds the binary accepts
+#   enabled   optional bool (default true). Set false to skip without deleting.
+#
+# The uniform CLI/JSON contract (see crates/bench-core) means the harness never
+# needs to know which language emitted a binary.
+
+[[binary]]
+name = "bench-arrow"
+bin_path = "crates/bench-arrow"
+lang = "rust"
+modes = ["in-mem"]
+formats = ["parquet"]
+kinds = ["synthetic"]
+# Pure decompressed baseline: decode Parquet -> Arrow, run the strongest
+# native scan kernel (memmem/SIMD substring, starts_with/ends_with).
+
+[[binary]]
+name = "bench-datafusion"
+bin_path = "crates/bench-datafusion"
+lang = "rust"
+modes = ["in-mem", "full-query"]
+formats = ["parquet", "vortex"]
+kinds = ["synthetic", "real"]
+# Vortex pushdown path via vortex-datafusion vs Parquet/Arrow baseline.
+
+[[binary]]
+name = "bench-duckdb"
+bin_path = "crates/bench-duckdb"
+lang = "rust"
+modes = ["in-mem", "full-query"]
+formats = ["parquet", "vortex"]
+kinds = ["synthetic", "real"]
+# duckdb crate with `LOAD vortex`. Heavy native build; see README.
+# Disabled by default so `python run.py` works on a fresh clone without the
+# (multi-minute) DuckDB C++ build and the runtime vortex community extension.
+enabled = false
+
+# ---- C++ binaries (later) -- same contract, just lang = "cpp" --------------
+# [[binary]]
+# name = "bench-duckdb-native"
+# bin_path = "cpp/bench-duckdb-native"
+# lang = "cpp"
+# modes = ["in-mem", "full-query"]
+# formats = ["parquet", "vortex"]
+# kinds = ["synthetic", "real"]
+# enabled = false
+#
+# [[binary]]
+# name = "bench-baseline"
+# bin_path = "cpp/bench-baseline"
+# lang = "cpp"
+# modes = ["in-mem"]
+# formats = ["parquet"]
+# kinds = ["synthetic"]
+# enabled = false

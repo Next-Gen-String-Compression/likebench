@@ -1,0 +1,434 @@
+{
+  "version": 1,
+  "buckets": {
+    "p001": 0.001,
+    "p01": 0.01,
+    "p10": 0.1,
+    "p50": 0.5
+  },
+  "queries": [
+    {
+      "kind": "synthetic",
+      "op": "prefix",
+      "column": "URL",
+      "value": "http://w",
+      "label": "prefix_URL_p01",
+      "selectivity": 0.00504,
+      "selectivity_bucket": "p01"
+    },
+    {
+      "kind": "synthetic",
+      "op": "prefix",
+      "column": "URL",
+      "value": "http://example.com/p",
+      "label": "prefix_URL_p10",
+      "selectivity": 0.0735,
+      "selectivity_bucket": "p10"
+    },
+    {
+      "kind": "synthetic",
+      "op": "prefix",
+      "column": "URL",
+      "value": "https:",
+      "label": "prefix_URL_p50",
+      "selectivity": 0.50206,
+      "selectivity_bucket": "p50"
+    },
+    {
+      "kind": "synthetic",
+      "op": "suffix",
+      "column": "URL",
+      "value": "3.html",
+      "label": "suffix_URL_p01",
+      "selectivity": 0.0085,
+      "selectivity_bucket": "p01"
+    },
+    {
+      "kind": "synthetic",
+      "op": "suffix",
+      "column": "URL",
+      "value": "html",
+      "label": "suffix_URL_p10",
+      "selectivity": 0.07754,
+      "selectivity_bucket": "p10"
+    },
+    {
+      "kind": "synthetic",
+      "op": "contains",
+      "column": "URL",
+      "value": "zqx",
+      "label": "contains_URL_p001",
+      "selectivity": 0.00098,
+      "selectivity_bucket": "p001"
+    },
+    {
+      "kind": "synthetic",
+      "op": "contains",
+      "column": "URL",
+      "value": "www",
+      "label": "contains_URL_p01",
+      "selectivity": 0.00984,
+      "selectivity_bucket": "p01"
+    },
+    {
+      "kind": "synthetic",
+      "op": "contains",
+      "column": "URL",
+      "value": "site",
+      "label": "contains_URL_p10",
+      "selectivity": 0.10428,
+      "selectivity_bucket": "p10"
+    },
+    {
+      "kind": "synthetic",
+      "op": "contains",
+      "column": "URL",
+      "value": "com",
+      "label": "contains_URL_p50",
+      "selectivity": 0.5019,
+      "selectivity_bucket": "p50"
+    },
+    {
+      "kind": "synthetic",
+      "op": "multicontains",
+      "column": "URL",
+      "values": [
+        "site",
+        "www"
+      ],
+      "mode": "all",
+      "label": "multicontains_URL_all",
+      "selectivity": 0.0,
+      "selectivity_bucket": "mixed"
+    },
+    {
+      "kind": "synthetic",
+      "op": "expr",
+      "column": "URL",
+      "predicate": {
+        "and": [
+          {
+            "prefix": "http://w"
+          },
+          {
+            "contains": "zqx"
+          }
+        ]
+      },
+      "label": "expr_URL_prefix_and_contains",
+      "selectivity": 2e-05,
+      "selectivity_bucket": "mixed"
+    },
+    {
+      "kind": "real",
+      "sql": "SELECT count(*) FROM hits WHERE \"URL\" LIKE '%www%'",
+      "column": "URL",
+      "label": "clickbench_like_URL"
+    },
+    {
+      "kind": "synthetic",
+      "op": "prefix",
+      "column": "Title",
+      "value": "Home 576",
+      "label": "prefix_Title_p001",
+      "selectivity": 0.00102,
+      "selectivity_bucket": "p001"
+    },
+    {
+      "kind": "synthetic",
+      "op": "prefix",
+      "column": "Title",
+      "value": "Goog",
+      "label": "prefix_Title_p01",
+      "selectivity": 0.00956,
+      "selectivity_bucket": "p01"
+    },
+    {
+      "kind": "synthetic",
+      "op": "prefix",
+      "column": "Title",
+      "value": "Brea",
+      "label": "prefix_Title_p10",
+      "selectivity": 0.10306,
+      "selectivity_bucket": "p10"
+    },
+    {
+      "kind": "synthetic",
+      "op": "prefix",
+      "column": "Title",
+      "value": "Home",
+      "label": "prefix_Title_p50",
+      "selectivity": 0.55832,
+      "selectivity_bucket": "p50"
+    },
+    {
+      "kind": "synthetic",
+      "op": "suffix",
+      "column": "Title",
+      "value": "2.html",
+      "label": "suffix_Title_p01",
+      "selectivity": 0.00968,
+      "selectivity_bucket": "p01"
+    },
+    {
+      "kind": "synthetic",
+      "op": "suffix",
+      "column": "Title",
+      "value": "html",
+      "label": "suffix_Title_p10",
+      "selectivity": 0.0888,
+      "selectivity_bucket": "p10"
+    },
+    {
+      "kind": "synthetic",
+      "op": "contains",
+      "column": "Title",
+      "value": "Google",
+      "label": "contains_Title_p01",
+      "selectivity": 0.00956,
+      "selectivity_bucket": "p01"
+    },
+    {
+      "kind": "synthetic",
+      "op": "contains",
+      "column": "Title",
+      "value": "Breaking",
+      "label": "contains_Title_p10",
+      "selectivity": 0.10306,
+      "selectivity_bucket": "p10"
+    },
+    {
+      "kind": "synthetic",
+      "op": "contains",
+      "column": "Title",
+      "value": "Home",
+      "label": "contains_Title_p50",
+      "selectivity": 0.55832,
+      "selectivity_bucket": "p50"
+    },
+    {
+      "kind": "synthetic",
+      "op": "multicontains",
+      "column": "Title",
+      "values": [
+        "Breaking",
+        "Google"
+      ],
+      "mode": "all",
+      "label": "multicontains_Title_all",
+      "selectivity": 0.0,
+      "selectivity_bucket": "mixed"
+    },
+    {
+      "kind": "synthetic",
+      "op": "expr",
+      "column": "Title",
+      "predicate": {
+        "and": [
+          {
+            "prefix": "Home 576"
+          },
+          {
+            "contains": "Google"
+          }
+        ]
+      },
+      "label": "expr_Title_prefix_and_contains",
+      "selectivity": 0.0,
+      "selectivity_bucket": "mixed"
+    },
+    {
+      "kind": "real",
+      "sql": "SELECT count(*) FROM hits WHERE \"Title\" LIKE '%Google%'",
+      "column": "Title",
+      "label": "clickbench_like_Title"
+    },
+    {
+      "kind": "synthetic",
+      "op": "prefix",
+      "column": "Referer",
+      "value": "http://y",
+      "label": "prefix_Referer_p01",
+      "selectivity": 0.00962,
+      "selectivity_bucket": "p01"
+    },
+    {
+      "kind": "synthetic",
+      "op": "prefix",
+      "column": "Referer",
+      "value": "http://e",
+      "label": "prefix_Referer_p10",
+      "selectivity": 0.09898,
+      "selectivity_bucket": "p10"
+    },
+    {
+      "kind": "synthetic",
+      "op": "prefix",
+      "column": "Referer",
+      "value": "http",
+      "label": "prefix_Referer_p50",
+      "selectivity": 0.40024,
+      "selectivity_bucket": "p50"
+    },
+    {
+      "kind": "synthetic",
+      "op": "suffix",
+      "column": "Referer",
+      "value": "3.html",
+      "label": "suffix_Referer_p01",
+      "selectivity": 0.00346,
+      "selectivity_bucket": "p01"
+    },
+    {
+      "kind": "synthetic",
+      "op": "contains",
+      "column": "Referer",
+      "value": "zqx",
+      "label": "contains_Referer_p001",
+      "selectivity": 0.0005,
+      "selectivity_bucket": "p001"
+    },
+    {
+      "kind": "synthetic",
+      "op": "contains",
+      "column": "Referer",
+      "value": "ads",
+      "label": "contains_Referer_p01",
+      "selectivity": 0.0125,
+      "selectivity_bucket": "p01"
+    },
+    {
+      "kind": "synthetic",
+      "op": "contains",
+      "column": "Referer",
+      "value": "product",
+      "label": "contains_Referer_p10",
+      "selectivity": 0.12004,
+      "selectivity_bucket": "p10"
+    },
+    {
+      "kind": "synthetic",
+      "op": "contains",
+      "column": "Referer",
+      "value": "example",
+      "label": "contains_Referer_p50",
+      "selectivity": 0.33516,
+      "selectivity_bucket": "p50"
+    },
+    {
+      "kind": "synthetic",
+      "op": "multicontains",
+      "column": "Referer",
+      "values": [
+        "product",
+        "ads"
+      ],
+      "mode": "all",
+      "label": "multicontains_Referer_all",
+      "selectivity": 0.0,
+      "selectivity_bucket": "mixed"
+    },
+    {
+      "kind": "synthetic",
+      "op": "expr",
+      "column": "Referer",
+      "predicate": {
+        "and": [
+          {
+            "prefix": "http://y"
+          },
+          {
+            "contains": "zqx"
+          }
+        ]
+      },
+      "label": "expr_Referer_prefix_and_contains",
+      "selectivity": 2e-05,
+      "selectivity_bucket": "mixed"
+    },
+    {
+      "kind": "real",
+      "sql": "SELECT count(*) FROM hits WHERE \"Referer\" LIKE '%ads%'",
+      "column": "Referer",
+      "label": "clickbench_like_Referer"
+    },
+    {
+      "kind": "synthetic",
+      "op": "prefix",
+      "column": "SearchPhrase",
+      "value": "goog",
+      "label": "prefix_SearchPhrase_p001",
+      "selectivity": 0.0017,
+      "selectivity_bucket": "p001"
+    },
+    {
+      "kind": "synthetic",
+      "op": "prefix",
+      "column": "SearchPhrase",
+      "value": "buy ",
+      "label": "prefix_SearchPhrase_p10",
+      "selectivity": 0.07124,
+      "selectivity_bucket": "p10"
+    },
+    {
+      "kind": "synthetic",
+      "op": "suffix",
+      "column": "SearchPhrase",
+      "value": "maps",
+      "label": "suffix_SearchPhrase_p001",
+      "selectivity": 0.0017,
+      "selectivity_bucket": "p001"
+    },
+    {
+      "kind": "synthetic",
+      "op": "suffix",
+      "column": "SearchPhrase",
+      "value": "hoes",
+      "label": "suffix_SearchPhrase_p10",
+      "selectivity": 0.07124,
+      "selectivity_bucket": "p10"
+    },
+    {
+      "kind": "synthetic",
+      "op": "contains",
+      "column": "SearchPhrase",
+      "value": "google",
+      "label": "contains_SearchPhrase_p001",
+      "selectivity": 0.0017,
+      "selectivity_bucket": "p001"
+    },
+    {
+      "kind": "synthetic",
+      "op": "contains",
+      "column": "SearchPhrase",
+      "value": "buy",
+      "label": "contains_SearchPhrase_p10",
+      "selectivity": 0.07124,
+      "selectivity_bucket": "p10"
+    },
+    {
+      "kind": "synthetic",
+      "op": "expr",
+      "column": "SearchPhrase",
+      "predicate": {
+        "and": [
+          {
+            "prefix": "goog"
+          },
+          {
+            "contains": "google"
+          }
+        ]
+      },
+      "label": "expr_SearchPhrase_prefix_and_contains",
+      "selectivity": 0.0017,
+      "selectivity_bucket": "mixed"
+    },
+    {
+      "kind": "real",
+      "sql": "SELECT count(*) FROM hits WHERE \"SearchPhrase\" LIKE '%buy%'",
+      "column": "SearchPhrase",
+      "label": "clickbench_like_SearchPhrase"
+    }
+  ]
+}

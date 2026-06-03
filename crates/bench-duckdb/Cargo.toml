@@ -1,0 +1,18 @@
+[package]
+name = "bench-duckdb"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "DuckDB engine via the duckdb crate, with `LOAD vortex` for the Vortex path."
+
+[[bin]]
+name = "bench-duckdb"
+path = "src/main.rs"
+
+[dependencies]
+bench-core.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+duckdb.workspace = true
