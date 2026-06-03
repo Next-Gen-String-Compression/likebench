@@ -53,9 +53,7 @@ log "cargo: $(cargo --version)"
 # ---------------------------------------------------------------------------
 log "building enabled rust binaries (cargo build --release) ..."
 mapfile -t CRATES < <(uv run python -c "
-import sys
-sys.path.insert(0, 'harness')
-from manifest import load_manifest
+from harness.manifest import load_manifest
 for b in load_manifest('benchmarks.toml'):
     if b.enabled and b.lang == 'rust':
         print(b.name)
