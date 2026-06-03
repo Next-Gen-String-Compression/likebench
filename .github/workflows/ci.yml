@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Python harness: lint + unit/smoke tests (fast, no heavy native deps).
+  # ---------------------------------------------------------------------------
+  python:
+    name: python (lint + tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Sync deps
+        run: uv sync --extra dev
+      - name: Ruff (lint + format check)
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: Pytest (harness smoke tests)
+        run: uv run pytest
+
+  # ---------------------------------------------------------------------------
+  # Light Rust crates: format, clippy, build, test. Fast to compile.
+  # ---------------------------------------------------------------------------
+  rust-light:
+    name: rust (core + convert + arrow)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Format check
+        run: cargo fmt --all -- --check
+      - name: Clippy (light crates)
+        run: cargo clippy -p bench-core -p convert -p bench-arrow --release -- -D warnings
+      - name: Build (light crates)
+        run: cargo build -p bench-core -p convert -p bench-arrow --release
+      - name: Test (light crates)
+        run: cargo test -p bench-core -p convert -p bench-arrow --release
+
+  # ---------------------------------------------------------------------------
+  # End-to-end pipeline on the generated `nano` dataset (offline, deterministic).
+  # Proves data -> convert -> mine -> run -> aggregate -> plot all wire up.
+  # ---------------------------------------------------------------------------
+  e2e-nano:
+    name: e2e (nano scale, offline)
+    runs-on: ubuntu-latest
+    needs: [rust-light, python]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Sync deps
+        run: uv sync
+      - name: Build binaries needed for nano e2e
+        run: cargo build -p convert -p bench-arrow --release
+      - name: Run pipeline (nano, bench-arrow only)
+        run: uv run python run.py --scale nano --engines bench-arrow --warmup 1 --measure 3
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-nano
+          path: results/
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # Heavy Rust crate: bench-datafusion pulls in DataFusion + Vortex (large dep
+  # tree). Compiled in its own cached job so it never blocks the fast feedback.
+  # ---------------------------------------------------------------------------
+  rust-datafusion:
+    name: rust (datafusion + vortex, heavy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build bench-datafusion
+        run: cargo build -p bench-datafusion --release
