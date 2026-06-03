@@ -96,7 +96,9 @@ async fn parquet_in_mem(args: &BenchArgs, sql: &str) -> Result<Outcome> {
 
     // Decode once into memory (this decode is the decompression cost).
     let load = bench_core::Timer::start();
-    let df = ctx.read_parquet(&path, ParquetReadOptions::default()).await?;
+    let df = ctx
+        .read_parquet(path.as_str(), ParquetReadOptions::default())
+        .await?;
     let schema: SchemaRef = Arc::new(df.schema().as_arrow().clone());
     let batches = df.collect().await?;
     let in_memory_bytes: u64 = batches
@@ -160,6 +162,7 @@ async fn parquet_full_query(args: &BenchArgs, sql: &str) -> Result<Outcome> {
 // Vortex (via vortex-datafusion v2::VortexTable)
 // --------------------------------------------------------------------------- //
 async fn vortex_in_mem(args: &BenchArgs, sql: &str) -> Result<Outcome> {
+    use vortex::file::OpenOptionsSessionExt;
     use vortex::io::session::RuntimeSessionExt;
     use vortex::session::VortexSession;
     use vortex::VortexSessionDefault;
@@ -198,6 +201,7 @@ async fn vortex_in_mem(args: &BenchArgs, sql: &str) -> Result<Outcome> {
 }
 
 async fn vortex_full_query(args: &BenchArgs, sql: &str) -> Result<Outcome> {
+    use vortex::file::OpenOptionsSessionExt;
     use vortex::io::session::RuntimeSessionExt;
     use vortex::session::VortexSession;
     use vortex::VortexSessionDefault;
