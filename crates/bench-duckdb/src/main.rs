@@ -32,8 +32,10 @@ fn main() -> Result<()> {
     let conn = Connection::open_in_memory()?;
     if args.format == Format::Vortex {
         // Community extension; requires network to INSTALL the first time.
-        conn.execute_batch("SET autoinstall_known_extensions=true; SET autoload_known_extensions=true;")
-            .ok();
+        conn.execute_batch(
+            "SET autoinstall_known_extensions=true; SET autoload_known_extensions=true;",
+        )
+        .ok();
         conn.execute_batch("INSTALL vortex FROM community; LOAD vortex;")
             .context("failed to LOAD the duckdb `vortex` community extension")?;
     }
@@ -85,7 +87,11 @@ fn main() -> Result<()> {
         load_ns,
         decompress_ns,
         pushdown,
-        plan: format!("{} {}", pushdown_tag(args.format, pushdown), plan.lines().next().unwrap_or("")),
+        plan: format!(
+            "{} {}",
+            pushdown_tag(args.format, pushdown),
+            plan.lines().next().unwrap_or("")
+        ),
         iters_ns,
     };
     out.print()

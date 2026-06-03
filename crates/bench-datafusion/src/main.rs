@@ -250,7 +250,7 @@ fn vortex_arrow_schema(
     session: &vortex::session::VortexSession,
     file: &vortex::file::VortexFile,
 ) -> Result<SchemaRef> {
-    use vortex::array::arrow::session::ArrowSessionExt;
+    use vortex::array::arrow::ArrowSessionExt;
     let schema = session.arrow().to_arrow_schema(file.dtype())?;
     Ok(Arc::new(schema))
 }

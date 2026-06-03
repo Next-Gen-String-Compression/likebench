@@ -234,8 +234,14 @@ pub enum Matcher {
     Prefix(String),
     Suffix(String),
     Contains(String),
-    Multi { values: Vec<String>, all: bool },
-    Expr { terms: Vec<(TermKind, String)>, all: bool },
+    Multi {
+        values: Vec<String>,
+        all: bool,
+    },
+    Expr {
+        terms: Vec<(TermKind, String)>,
+        all: bool,
+    },
 }
 
 impl Matcher {
@@ -258,7 +264,10 @@ impl Matcher {
                 Matcher::Multi { values, all }
             }
             "expr" => {
-                let pred = spec.predicate.as_ref().context("op expr requires `predicate`")?;
+                let pred = spec
+                    .predicate
+                    .as_ref()
+                    .context("op expr requires `predicate`")?;
                 let (terms_raw, all) = match (&pred.and, &pred.or) {
                     (Some(t), None) => (t, true),
                     (None, Some(t)) => (t, false),
@@ -350,12 +359,28 @@ fn term_sql(col: &str, kind: TermKind, value: &str) -> String {
 pub fn synthetic_to_sql(spec: &SyntheticSpec, table: &str) -> Result<String> {
     let col = &spec.column;
     let pred = match spec.op.as_str() {
-        "prefix" => term_sql(col, TermKind::Prefix, spec.value.as_deref().context("value")?),
-        "suffix" => term_sql(col, TermKind::Suffix, spec.value.as_deref().context("value")?),
-        "contains" => term_sql(col, TermKind::Contains, spec.value.as_deref().context("value")?),
+        "prefix" => term_sql(
+            col,
+            TermKind::Prefix,
+            spec.value.as_deref().context("value")?,
+        ),
+        "suffix" => term_sql(
+            col,
+            TermKind::Suffix,
+            spec.value.as_deref().context("value")?,
+        ),
+        "contains" => term_sql(
+            col,
+            TermKind::Contains,
+            spec.value.as_deref().context("value")?,
+        ),
         "multicontains" => {
             let values = spec.values.as_ref().context("values")?;
-            let joiner = if spec.mode.as_deref() == Some("any") { " OR " } else { " AND " };
+            let joiner = if spec.mode.as_deref() == Some("any") {
+                " OR "
+            } else {
+                " AND "
+            };
             values
                 .iter()
                 .map(|v| term_sql(col, TermKind::Contains, v))
@@ -486,9 +511,15 @@ mod tests {
         let m = Matcher::Contains("oo".into());
         assert!(m.matches("food"));
         assert!(!m.matches("bar"));
-        let any = Matcher::Multi { values: vec!["x".into(), "y".into()], all: false };
+        let any = Matcher::Multi {
+            values: vec!["x".into(), "y".into()],
+            all: false,
+        };
         assert!(any.matches("axe"));
-        let all = Matcher::Multi { values: vec!["a".into(), "z".into()], all: true };
+        let all = Matcher::Multi {
+            values: vec!["a".into(), "z".into()],
+            all: true,
+        };
         assert!(!all.matches("axe"));
     }
 

@@ -21,15 +21,22 @@ use bench_core::{checksum, BenchArgs, BenchOutput, Format, Matcher, Mode, QueryS
 enum Compiled {
     Prefix(String),
     Suffix(String),
-    Contains(Finder<'static>),
-    Multi { finders: Vec<Finder<'static>>, all: bool },
-    Expr { terms: Vec<CompiledTerm>, all: bool },
+    // Boxed: a `Finder` is large; boxing keeps the enum compact.
+    Contains(Box<Finder<'static>>),
+    Multi {
+        finders: Vec<Finder<'static>>,
+        all: bool,
+    },
+    Expr {
+        terms: Vec<CompiledTerm>,
+        all: bool,
+    },
 }
 
 enum CompiledTerm {
     Prefix(String),
     Suffix(String),
-    Contains(Finder<'static>),
+    Contains(Box<Finder<'static>>),
 }
 
 impl CompiledTerm {
@@ -37,7 +44,7 @@ impl CompiledTerm {
         match kind {
             TermKind::Prefix => CompiledTerm::Prefix(v.to_string()),
             TermKind::Suffix => CompiledTerm::Suffix(v.to_string()),
-            TermKind::Contains => CompiledTerm::Contains(Finder::new(v).into_owned()),
+            TermKind::Contains => CompiledTerm::Contains(Box::new(Finder::new(v).into_owned())),
         }
     }
     #[inline]
@@ -55,13 +62,16 @@ impl Compiled {
         match m {
             Matcher::Prefix(p) => Compiled::Prefix(p.clone()),
             Matcher::Suffix(p) => Compiled::Suffix(p.clone()),
-            Matcher::Contains(p) => Compiled::Contains(Finder::new(p).into_owned()),
+            Matcher::Contains(p) => Compiled::Contains(Box::new(Finder::new(p).into_owned())),
             Matcher::Multi { values, all } => Compiled::Multi {
                 finders: values.iter().map(|v| Finder::new(v).into_owned()).collect(),
                 all: *all,
             },
             Matcher::Expr { terms, all } => Compiled::Expr {
-                terms: terms.iter().map(|(k, v)| CompiledTerm::from(*k, v)).collect(),
+                terms: terms
+                    .iter()
+                    .map(|(k, v)| CompiledTerm::from(*k, v))
+                    .collect(),
                 all: *all,
             },
         }
@@ -113,7 +123,10 @@ fn main() -> Result<()> {
     let load_ns = load.elapsed_ns();
 
     let rows: u64 = arrays.iter().map(|a| a.len() as u64).sum();
-    let in_memory_bytes: u64 = arrays.iter().map(|a| a.get_array_memory_size() as u64).sum();
+    let in_memory_bytes: u64 = arrays
+        .iter()
+        .map(|a| a.get_array_memory_size() as u64)
+        .sum();
 
     // ---- measured iterations: scan + count, timing compute only ----
     let mut iters_ns = Vec::with_capacity(args.iterations);
@@ -181,13 +194,22 @@ fn count_matches(arrays: &[ArrayRef], m: &Compiled) -> u64 {
 
 fn count_in_array(a: &dyn Array, m: &Compiled) -> u64 {
     if let Some(arr) = a.as_any().downcast_ref::<StringArray>() {
-        return arr.iter().filter(|v| v.map(|s| m.hit(s)).unwrap_or(false)).count() as u64;
+        return arr
+            .iter()
+            .filter(|v| v.map(|s| m.hit(s)).unwrap_or(false))
+            .count() as u64;
     }
     if let Some(arr) = a.as_any().downcast_ref::<LargeStringArray>() {
-        return arr.iter().filter(|v| v.map(|s| m.hit(s)).unwrap_or(false)).count() as u64;
+        return arr
+            .iter()
+            .filter(|v| v.map(|s| m.hit(s)).unwrap_or(false))
+            .count() as u64;
     }
     if let Some(arr) = a.as_any().downcast_ref::<StringViewArray>() {
-        return arr.iter().filter(|v| v.map(|s| m.hit(s)).unwrap_or(false)).count() as u64;
+        return arr
+            .iter()
+            .filter(|v| v.map(|s| m.hit(s)).unwrap_or(false))
+            .count() as u64;
     }
     panic!(
         "unsupported arrow string type: {:?} (expected Utf8/LargeUtf8/Utf8View)",

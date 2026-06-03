@@ -112,7 +112,8 @@ fn read_input(path: &Path, fmt: &str) -> Result<(SchemaRef, Vec<RecordBatch>, u6
             let mut buf = BufReader::new(File::open(path)?);
             let (schema, _) = infer_json_schema_from_seekable(&mut buf, None)?;
             let schema = SchemaRef::new(schema);
-            let reader = ReaderBuilder::new(schema.clone()).build(BufReader::new(File::open(path)?))?;
+            let reader =
+                ReaderBuilder::new(schema.clone()).build(BufReader::new(File::open(path)?))?;
             let batches = reader.collect::<Result<Vec<_>, _>>()?;
             let (rows, mem) = totals(&batches);
             Ok((schema, batches, rows, mem))
@@ -123,7 +124,10 @@ fn read_input(path: &Path, fmt: &str) -> Result<(SchemaRef, Vec<RecordBatch>, u6
 
 fn totals(batches: &[RecordBatch]) -> (u64, u64) {
     let rows = batches.iter().map(|b| b.num_rows() as u64).sum();
-    let mem = batches.iter().map(|b| b.get_array_memory_size() as u64).sum();
+    let mem = batches
+        .iter()
+        .map(|b| b.get_array_memory_size() as u64)
+        .sum();
     (rows, mem)
 }
 
@@ -157,7 +161,12 @@ fn run(args: &Args) -> Result<Report> {
     })
 }
 
-fn write_parquet(out: &Path, schema: SchemaRef, batches: &[RecordBatch], codec: &str) -> Result<u64> {
+fn write_parquet(
+    out: &Path,
+    schema: SchemaRef,
+    batches: &[RecordBatch],
+    codec: &str,
+) -> Result<u64> {
     use parquet::arrow::ArrowWriter;
     use parquet::basic::{Compression, ZstdLevel};
     use parquet::file::properties::WriterProperties;
@@ -168,7 +177,9 @@ fn write_parquet(out: &Path, schema: SchemaRef, batches: &[RecordBatch], codec: 
         "none" | "uncompressed" => Compression::UNCOMPRESSED,
         other => bail!("unknown parquet compression {other:?}"),
     };
-    let props = WriterProperties::builder().set_compression(compression).build();
+    let props = WriterProperties::builder()
+        .set_compression(compression)
+        .build();
 
     let timer = bench_core::Timer::start();
     let file = File::create(out).with_context(|| format!("create {out:?}"))?;
