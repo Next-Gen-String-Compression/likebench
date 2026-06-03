@@ -51,7 +51,7 @@ class ColumnInputs:
 
 def _run_convert(convert_bin: Path, args: list[str]) -> dict:
     proc = subprocess.run(
-        [str(convert_bin), *args, "--output", "json"],
+        [str(convert_bin), *args, "--report", "json"],
         capture_output=True,
         text=True,
     )

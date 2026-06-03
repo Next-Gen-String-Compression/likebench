@@ -130,8 +130,8 @@ The converter binary is where compression metrics are measured:
 ```
 convert --input <path> --input-format auto|csv|json|parquet \
         --output <path> --output-format parquet|vortex \
-        --compression <codec> --output json
-# emits: { encode_ns, input_bytes, output_bytes, ratio }
+        --compression <codec> --report json
+# emits: { encode_ns, input_bytes, uncompressed_bytes, output_bytes, ratio, rows }
 ```
 
 ## Reviewer-defensibility checks (baked in)
