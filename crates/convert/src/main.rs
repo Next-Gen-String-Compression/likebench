@@ -46,6 +46,11 @@ struct Report {
     input_bytes: u64,
     uncompressed_bytes: u64,
     output_bytes: u64,
+    /// Fair, framing-free compressed footprint for cross-format comparison:
+    /// the sum of the in-memory compressed buffers. For Vortex this is the
+    /// array-tree `nbytes()` (every buffer in the compressed tree); for Parquet
+    /// it is the summed compressed column-chunk size (data pages, no footer).
+    inmem_compressed_bytes: u64,
     ratio: f64,
     rows: u64,
     output_format: String,
@@ -136,15 +141,16 @@ fn run(args: &Args) -> Result<Report> {
     let input_bytes = bench_core::file_bytes(&args.input);
     let (schema, batches, rows, uncompressed_bytes) = read_input(&args.input, in_fmt)?;
 
-    let encode_ns = match args.output_format.as_str() {
+    let (encode_ns, inmem_compressed_bytes) = match args.output_format.as_str() {
         "parquet" => write_parquet(&args.output, schema, &batches, &args.compression)?,
         "vortex" => write_vortex(&args.output, schema, batches)?,
         other => bail!("unknown --output-format {other:?} (expected parquet|vortex)"),
     };
 
     let output_bytes = bench_core::file_bytes(&args.output);
-    let ratio = if output_bytes > 0 {
-        uncompressed_bytes as f64 / output_bytes as f64
+    // Ratio uses the fair, framing-free in-memory compressed footprint.
+    let ratio = if inmem_compressed_bytes > 0 {
+        uncompressed_bytes as f64 / inmem_compressed_bytes as f64
     } else {
         0.0
     };
@@ -154,6 +160,7 @@ fn run(args: &Args) -> Result<Report> {
         input_bytes,
         uncompressed_bytes,
         output_bytes,
+        inmem_compressed_bytes,
         ratio,
         rows,
         output_format: args.output_format.clone(),
@@ -166,7 +173,7 @@ fn write_parquet(
     schema: SchemaRef,
     batches: &[RecordBatch],
     codec: &str,
-) -> Result<u64> {
+) -> Result<(u64, u64)> {
     use parquet::arrow::ArrowWriter;
     use parquet::basic::{Compression, ZstdLevel};
     use parquet::file::properties::WriterProperties;
@@ -187,20 +194,31 @@ fn write_parquet(
     for b in batches {
         writer.write(b)?;
     }
-    writer.close()?;
-    Ok(timer.elapsed_ns())
+    let meta = writer.close()?;
+    let encode_ns = timer.elapsed_ns();
+
+    // Fair compressed footprint: summed compressed column-chunk sizes (the data
+    // pages), excluding the file footer/schema framing.
+    let inmem: i64 = meta
+        .row_groups
+        .iter()
+        .flat_map(|rg| rg.columns.iter())
+        .map(|c| c.meta_data.as_ref().map(|m| m.total_compressed_size).unwrap_or(0))
+        .sum();
+    Ok((encode_ns, inmem.max(0) as u64))
 }
 
-fn write_vortex(out: &Path, schema: SchemaRef, batches: Vec<RecordBatch>) -> Result<u64> {
+fn write_vortex(out: &Path, schema: SchemaRef, batches: Vec<RecordBatch>) -> Result<(u64, u64)> {
     use vortex::array::arrays::ChunkedArray;
     use vortex::array::arrow::FromArrowArray;
-    use vortex::array::{ArrayRef, IntoArray};
+    use vortex::array::{ArrayRef, IntoArray, VortexSessionExecute};
     use vortex::dtype::arrow::FromArrowType;
     use vortex::dtype::DType;
     use vortex::file::WriteOptionsSessionExt;
     use vortex::io::session::RuntimeSessionExt;
     use vortex::session::VortexSession;
     use vortex::VortexSessionDefault;
+    use vortex_btrblocks::BtrBlocksCompressor;
 
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -208,17 +226,27 @@ fn write_vortex(out: &Path, schema: SchemaRef, batches: Vec<RecordBatch>) -> Res
 
     // Everything that touches the vortex runtime happens inside `block_on` so
     // `with_tokio()` (which captures the current tokio handle) is valid.
-    // `Vec<u8>` implements `VortexWrite`; encoding to a buffer avoids needing
-    // vortex's `tokio` feature for `tokio::fs::File`.
     //
     // The workspace pins vortex with `unstable_encodings` (+ `zstd`), so the
-    // default Btrblocks `ALL_SCHEMES` cascade used by the write strategy below
-    // includes Vortex's unstable string schemes (OnPairScheme, ZstdBuffersScheme).
-    // Every Vortex run in this repo uses them — see README "Vortex encodings".
-    let (encode_ns, buf) = rt.block_on(async move {
+    // default Btrblocks `ALL_SCHEMES` cascade used here includes Vortex's
+    // unstable string schemes (OnPairScheme, ZstdBuffersScheme). Every Vortex run
+    // in this repo uses them — see README "Vortex encodings".
+    let (encode_ns, buf, inmem) = rt.block_on(async move {
         let session = VortexSession::default().with_tokio();
+        let dtype = DType::from_arrow(schema.clone());
+
+        // Fair compressed footprint: compress the *whole column as one array*
+        // (matching the string codecs' single global dictionary), then sum every
+        // buffer in the resulting compressed array tree (`nbytes`). This is the
+        // framing-free in-memory size, not the serialized file size.
+        let single_batch = arrow::compute::concat_batches(&schema, &batches)?;
+        let single = ArrayRef::from_arrow(single_batch, false)?;
+        let compressor = BtrBlocksCompressor::default();
+        let mut ctx = session.create_execution_ctx();
+        let inmem = compressor.compress(&single, &mut ctx)?.nbytes();
+
+        // Encode the (chunked) file the query engines read.
         let timer = bench_core::Timer::start();
-        let dtype = DType::from_arrow(schema);
         let chunks: Vec<ArrayRef> = batches
             .into_iter()
             .map(|b| ArrayRef::from_arrow(b, false))
@@ -229,9 +257,9 @@ fn write_vortex(out: &Path, schema: SchemaRef, batches: Vec<RecordBatch>) -> Res
             .write_options()
             .write(&mut buf, array.to_array_stream())
             .await?;
-        anyhow::Ok((timer.elapsed_ns(), buf))
+        anyhow::Ok((timer.elapsed_ns(), buf, inmem))
     })?;
 
     std::fs::write(out, &buf)?;
-    Ok(encode_ns)
+    Ok((encode_ns, inmem))
 }

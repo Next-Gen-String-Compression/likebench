@@ -137,7 +137,10 @@ def main(argv: list[str]) -> int:
         name, prov = ALGO[key]
         row = rows.setdefault(key, Row(name, prov))
         pb = payload[m.column]
-        row.per_col_ratio[m.column] = pb / m.output_bytes if m.output_bytes else 0.0
+        # Fair, framing-free footprint: Vortex array-tree nbytes / Parquet
+        # compressed column-chunk bytes (same basis as the codecs' compressed_bytes).
+        comp = m.inmem_compressed_bytes or m.output_bytes
+        row.per_col_ratio[m.column] = pb / comp if comp else 0.0
         if m.encode_ns:
             row.per_col_comp_mbps[m.column] = pb / MB / (m.encode_ns / 1e9)
 

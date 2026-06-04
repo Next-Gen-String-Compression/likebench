@@ -41,10 +41,20 @@ struct Outcome {
 
 fn main() -> Result<()> {
     let args = BenchArgs::parse();
-    let rt = tokio::runtime::Builder::new_multi_thread()
+    // Single-threaded everywhere for a fair comparison against the single-threaded
+    // Arrow baseline and the string-codec engines (see `new_ctx`).
+    let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
     rt.block_on(run(args))
+}
+
+/// A DataFusion context pinned to a single partition (one thread), so latency is
+/// comparable to the single-threaded Arrow/codec engines rather than fanned out
+/// across cores.
+fn new_ctx() -> SessionContext {
+    use datafusion::prelude::SessionConfig;
+    SessionContext::new_with_config(SessionConfig::new().with_target_partitions(1))
 }
 
 async fn run(args: BenchArgs) -> Result<()> {
@@ -93,7 +103,7 @@ fn build_sql(spec: &QuerySpec) -> Result<String> {
 // Parquet
 // --------------------------------------------------------------------------- //
 async fn parquet_in_mem(args: &BenchArgs, sql: &str) -> Result<Outcome> {
-    let ctx = SessionContext::new();
+    let ctx = new_ctx();
     let path = args.input.to_string_lossy().to_string();
 
     // Decode once into memory (this decode is the decompression cost).
@@ -134,7 +144,7 @@ async fn parquet_full_query(args: &BenchArgs, sql: &str) -> Result<Outcome> {
 
     // Each iteration re-scans the file end-to-end via a fresh context.
     for _ in 0..args.iterations {
-        let ctx = SessionContext::new();
+        let ctx = new_ctx();
         ctx.register_parquet(TABLE, &path, ParquetReadOptions::default())
             .await?;
         let t = bench_core::Timer::start();
@@ -142,7 +152,7 @@ async fn parquet_full_query(args: &BenchArgs, sql: &str) -> Result<Outcome> {
         iters_ns.push(t.elapsed_ns());
     }
 
-    let ctx = SessionContext::new();
+    let ctx = new_ctx();
     ctx.register_parquet(TABLE, &path, ParquetReadOptions::default())
         .await?;
     let rows = count(&ctx, &format!("SELECT count(*) FROM {TABLE}")).await?;
@@ -182,7 +192,7 @@ async fn vortex_in_mem(args: &BenchArgs, sql: &str) -> Result<Outcome> {
     let data_source = file.data_source()?;
     let table = VortexTable::new(data_source, session.clone(), arrow_schema);
 
-    let ctx = SessionContext::new();
+    let ctx = new_ctx();
     ctx.register_table(TABLE, Arc::new(table))?;
     let load_ns = load.elapsed_ns();
 
@@ -218,7 +228,7 @@ async fn vortex_full_query(args: &BenchArgs, sql: &str) -> Result<Outcome> {
     let mut plan = String::new();
 
     for i in 0..args.iterations {
-        let ctx = SessionContext::new();
+        let ctx = new_ctx();
         let file = session.open_options().open_path(path).await?;
         if i == 0 {
             rows = file.row_count();

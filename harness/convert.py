@@ -31,6 +31,9 @@ class ConvertMetrics:
     ratio: float
     rows: int
     codec: str
+    # Fair, framing-free compressed footprint (Vortex array-tree nbytes / Parquet
+    # summed column-chunk size). Defaults to output_bytes for older caches.
+    inmem_compressed_bytes: int = 0
 
     def as_dict(self) -> dict:
         d = self.__dict__.copy()
@@ -185,6 +188,9 @@ def build_columns(
                 output_bytes=int(m_pq["output_bytes"]),
                 ratio=float(m_pq["ratio"]),
                 rows=int(m_pq.get("rows", 0)),
+                inmem_compressed_bytes=int(
+                    m_pq.get("inmem_compressed_bytes", m_pq["output_bytes"])
+                ),
             ),
             ConvertMetrics(
                 column=col,
@@ -197,6 +203,9 @@ def build_columns(
                 output_bytes=int(m_vx["output_bytes"]),
                 ratio=float(m_vx["ratio"]),
                 rows=int(m_vx.get("rows", 0)),
+                inmem_compressed_bytes=int(
+                    m_vx.get("inmem_compressed_bytes", m_vx["output_bytes"])
+                ),
             ),
         ]
         metrics.extend(col_metrics)
