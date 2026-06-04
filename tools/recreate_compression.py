@@ -52,6 +52,9 @@ ALGO = {
     "__parquet__": ("Parquet+zstd", "new"),
 }
 MB = 1_000_000.0
+# Each codec binary times this many random single-row decodes for the
+# point-access metric (must match RANDOM_ROWS in bench-compress-cpp / bench-onpair).
+RANDOM_DECODES = 50_000
 
 
 @dataclass
@@ -61,7 +64,7 @@ class Row:
     per_col_ratio: dict[str, float] = field(default_factory=dict)
     per_col_comp_mbps: dict[str, float] = field(default_factory=dict)
     per_col_decomp_mbps: dict[str, float] = field(default_factory=dict)
-    per_col_rand_mbps: dict[str, float] = field(default_factory=dict)
+    per_col_rand_mrows: dict[str, float] = field(default_factory=dict)
 
     def mean_ratio(self) -> float:
         return statistics.fmean(self.per_col_ratio.values()) if self.per_col_ratio else 0.0
@@ -129,7 +132,9 @@ def main(argv: list[str]) -> int:
         if res.decompress_ns:
             row.per_col_decomp_mbps[col] = pb / MB / (res.decompress_ns / 1e9)
         if res.decompress_random_ns:
-            row.per_col_rand_mbps[col] = pb / MB / (res.decompress_random_ns / 1e9)
+            # Honest point-access rate: random rows decoded per second (the work
+            # is RANDOM_DECODES rows, NOT the whole column).
+            row.per_col_rand_mrows[col] = RANDOM_DECODES / 1e6 / (res.decompress_random_ns / 1e9)
 
     # --- columnar formats from `convert` (ratio + compress speed) ------------
     for m in comp_metrics:
@@ -169,14 +174,15 @@ def _write_reports(out_dir: Path, columns, rows: dict[str, Row]) -> None:
 
     # Speed table (mean across columns)
     st = [
-        "# Throughput (MB/s of uncompressed payload, mean across columns)\n",
-        "| algorithm | source | compress | decompress | random-access |",
+        "# Throughput, mean across columns. compress/decompress = MB/s of uncompressed "
+        "payload; random = M random single-row decodes/s.\n",
+        "| algorithm | source | compress MB/s | decompress MB/s | random Mrows/s |",
         "|---|---|---|---|---|",
     ]
     for r in sorted(rows.values(), key=lambda r: r.mean(r.per_col_comp_mbps) or 0, reverse=True):
         st.append(
             f"| {r.algo} | {r.provenance} | {_fmt(r.mean(r.per_col_comp_mbps), 1)} | "
-            f"{_fmt(r.mean(r.per_col_decomp_mbps), 1)} | {_fmt(r.mean(r.per_col_rand_mbps), 1)} |"
+            f"{_fmt(r.mean(r.per_col_decomp_mbps), 1)} | {_fmt(r.mean(r.per_col_rand_mrows), 2)} |"
         )
     (out_dir / "speed.md").write_text("\n".join(st) + "\n")
 
@@ -208,7 +214,7 @@ def _write_reports(out_dir: Path, columns, rows: dict[str, Row]) -> None:
                     "ratio": r.per_col_ratio,
                     "compress_mbps": r.per_col_comp_mbps,
                     "decompress_mbps": r.per_col_decomp_mbps,
-                    "random_mbps": r.per_col_rand_mbps,
+                    "random_mrows": r.per_col_rand_mrows,
                 }
                 for r in rows.values()
             },

@@ -13,7 +13,7 @@
 //! DuckDB from source (the `bundled` feature) and, for the Vortex path, requires
 //! the `vortex` community extension to be installable/loadable on the host.
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::Parser;
 use duckdb::Connection;
 
@@ -44,6 +44,7 @@ fn main() -> Result<()> {
     let reader = match args.format {
         Format::Parquet => format!("read_parquet('{path}')"),
         Format::Vortex => format!("read_vortex('{path}')"),
+        Format::Raw => bail!("bench-duckdb does not support --format raw (.strings)"),
     };
 
     // Build the `hits` relation. in-mem materializes; full-query is a view.
@@ -131,5 +132,6 @@ fn pushdown_tag(fmt: Format, pushdown: bool) -> &'static str {
         Format::Vortex if pushdown => "[vortex-native pushdown]",
         Format::Vortex => "[vortex decode fallback]",
         Format::Parquet => "[parquet baseline]",
+        Format::Raw => "[raw]",
     }
 }
