@@ -191,6 +191,19 @@ everything. The `duckdb:` source needs the optional `duckdb` package
 (`uv sync --extra duckdb`). TPC-H and Kaggle are just DuckDB files you point at
 with `duckdb:<path>` — exactly CompressionBenchmark's workflow.
 
+## Vortex encodings
+
+**All Vortex runs in this repo use Vortex's `unstable_encodings`.** The workspace
+pins `vortex`/`vortex-file`/`vortex-btrblocks` with the `["zstd",
+"unstable_encodings"]` features, so the default Btrblocks `ALL_SCHEMES` cascade
+(used by both the `convert` writer and the `bench-datafusion` reader) includes
+Vortex's unstable string schemes — notably its own Rust **`OnPairScheme`** and
+**`ZstdBuffersScheme`** (buffer-level Zstd). This materially improves Vortex's
+compression ratio over the stable-only default and is the configuration every
+ratio/latency number here is measured under. Any new Vortex engine added to the
+workspace inherits these features automatically; do not add a Vortex engine that
+disables them, or its numbers won't be comparable.
+
 ## Extending: add an engine in two steps
 
 1. Drop a crate under `crates/<name>` (or `cpp/<name>`) that honours the CLI/JSON

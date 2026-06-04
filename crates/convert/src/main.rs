@@ -210,6 +210,11 @@ fn write_vortex(out: &Path, schema: SchemaRef, batches: Vec<RecordBatch>) -> Res
     // `with_tokio()` (which captures the current tokio handle) is valid.
     // `Vec<u8>` implements `VortexWrite`; encoding to a buffer avoids needing
     // vortex's `tokio` feature for `tokio::fs::File`.
+    //
+    // The workspace pins vortex with `unstable_encodings` (+ `zstd`), so the
+    // default Btrblocks `ALL_SCHEMES` cascade used by the write strategy below
+    // includes Vortex's unstable string schemes (OnPairScheme, ZstdBuffersScheme).
+    // Every Vortex run in this repo uses them — see README "Vortex encodings".
     let (encode_ns, buf) = rt.block_on(async move {
         let session = VortexSession::default().with_tokio();
         let timer = bench_core::Timer::start();
