@@ -21,7 +21,6 @@ from harness import convert as convert_mod
 from harness import data as data_mod
 from harness import datasets, mine_queries, plots, runner
 from harness.manifest import enabled_binaries
-from harness.spec import STRING_COLUMNS
 
 REPO_ROOT = Path(__file__).resolve().parent
 

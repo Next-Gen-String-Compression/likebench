@@ -21,3 +21,4 @@ parquet.workspace = true
 tokio.workspace = true
 futures.workspace = true
 vortex.workspace = true
+vortex-btrblocks.workspace = true

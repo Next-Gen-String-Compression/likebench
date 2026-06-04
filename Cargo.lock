@@ -1163,6 +1163,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "vortex",
+ "vortex-btrblocks",
 ]
 
 [[package]]

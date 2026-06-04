@@ -156,7 +156,10 @@ fn main() -> Result<()> {
         load_ns,
         decompress_ns,
         pushdown: false,
-        plan: format!("OnPairDecode[{codec_name}] -> matcher[{}] (decompress-then-scan)", synth.op),
+        plan: format!(
+            "OnPairDecode[{codec_name}] -> matcher[{}] (decompress-then-scan)",
+            synth.op
+        ),
         iters_ns,
         codec: Some(codec_name),
         compress_ns: Some(compress_ns),

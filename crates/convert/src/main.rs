@@ -200,10 +200,9 @@ fn write_parquet(
     // Fair compressed footprint: summed compressed column-chunk sizes (the data
     // pages), excluding the file footer/schema framing.
     let inmem: i64 = meta
-        .row_groups
+        .row_groups()
         .iter()
-        .flat_map(|rg| rg.columns.iter())
-        .map(|c| c.meta_data.as_ref().map(|m| m.total_compressed_size).unwrap_or(0))
+        .map(|rg| rg.compressed_size())
         .sum();
     Ok((encode_ns, inmem.max(0) as u64))
 }

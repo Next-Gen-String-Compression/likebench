@@ -220,9 +220,7 @@ def run_job(job: Job, repo_root: Path, *, warmup: int, measured: int) -> RunEntr
         compressed_bytes=res.compressed_bytes,
         decompress_random_ns=res.decompress_random_ns,
         compression_ratio=(
-            res.in_memory_bytes / res.compressed_bytes
-            if res.compressed_bytes
-            else None
+            res.in_memory_bytes / res.compressed_bytes if res.compressed_bytes else None
         ),
     )
 

@@ -157,22 +157,26 @@ def _write_reports(out_dir: Path, columns, rows: dict[str, Row]) -> None:
     ordered = sorted(rows.values(), key=lambda r: r.mean_ratio(), reverse=True)
 
     # Ratio table
-    rt = ["# Compression ratio (× vs raw UTF-8 payload)\n",
-          "| algorithm | source | " + " | ".join(columns) + " | **mean** |",
-          "|" + "---|" * (len(columns) + 3)]
+    rt = [
+        "# Compression ratio (× vs raw UTF-8 payload)\n",
+        "| algorithm | source | " + " | ".join(columns) + " | **mean** |",
+        "|" + "---|" * (len(columns) + 3),
+    ]
     for r in ordered:
         cells = " | ".join(_fmt(r.per_col_ratio.get(c)) for c in columns)
         rt.append(f"| {r.algo} | {r.provenance} | {cells} | **{r.mean_ratio():.2f}** |")
     (out_dir / "ratio.md").write_text("\n".join(rt) + "\n")
 
     # Speed table (mean across columns)
-    st = ["# Throughput (MB/s of uncompressed payload, mean across columns)\n",
-          "| algorithm | source | compress | decompress | random-access |",
-          "|---|---|---|---|---|"]
-    for r in sorted(rows.values(), key=lambda r: (r.mean(r.per_col_comp_mbps) or 0), reverse=True):
+    st = [
+        "# Throughput (MB/s of uncompressed payload, mean across columns)\n",
+        "| algorithm | source | compress | decompress | random-access |",
+        "|---|---|---|---|---|",
+    ]
+    for r in sorted(rows.values(), key=lambda r: r.mean(r.per_col_comp_mbps) or 0, reverse=True):
         st.append(
-            f"| {r.algo} | {r.provenance} | {_fmt(r.mean(r.per_col_comp_mbps),1)} | "
-            f"{_fmt(r.mean(r.per_col_decomp_mbps),1)} | {_fmt(r.mean(r.per_col_rand_mbps),1)} |"
+            f"| {r.algo} | {r.provenance} | {_fmt(r.mean(r.per_col_comp_mbps), 1)} | "
+            f"{_fmt(r.mean(r.per_col_decomp_mbps), 1)} | {_fmt(r.mean(r.per_col_rand_mbps), 1)} |"
         )
     (out_dir / "speed.md").write_text("\n".join(st) + "\n")
 
@@ -182,21 +186,35 @@ def _write_reports(out_dir: Path, columns, rows: dict[str, Row]) -> None:
     best_ported = max(ported, key=lambda r: r.mean_ratio()) if ported else None
     dt = ["# Diff — new entries vs the ported CompressionBenchmark roster\n"]
     if best_ported:
-        dt.append(f"Best ported algorithm by mean ratio: **{best_ported.algo}** "
-                  f"({best_ported.mean_ratio():.2f}×).\n")
+        dt.append(
+            f"Best ported algorithm by mean ratio: **{best_ported.algo}** "
+            f"({best_ported.mean_ratio():.2f}×).\n"
+        )
         dt.append("| new algorithm | mean ratio | Δ vs best-ported | compress MB/s |")
         dt.append("|---|---|---|---|")
         for r in sorted(new, key=lambda r: r.mean_ratio(), reverse=True):
             delta = r.mean_ratio() - best_ported.mean_ratio()
-            dt.append(f"| {r.algo} | {r.mean_ratio():.2f}× | {delta:+.2f}× | "
-                      f"{_fmt(r.mean(r.per_col_comp_mbps),1)} |")
+            dt.append(
+                f"| {r.algo} | {r.mean_ratio():.2f}× | {delta:+.2f}× | "
+                f"{_fmt(r.mean(r.per_col_comp_mbps), 1)} |"
+            )
     (out_dir / "diff.md").write_text("\n".join(dt) + "\n")
 
-    (out_dir / "recreation.json").write_text(json.dumps(
-        {r.algo: {"source": r.provenance, "ratio": r.per_col_ratio,
-                  "compress_mbps": r.per_col_comp_mbps,
-                  "decompress_mbps": r.per_col_decomp_mbps,
-                  "random_mbps": r.per_col_rand_mbps} for r in rows.values()}, indent=2))
+    (out_dir / "recreation.json").write_text(
+        json.dumps(
+            {
+                r.algo: {
+                    "source": r.provenance,
+                    "ratio": r.per_col_ratio,
+                    "compress_mbps": r.per_col_comp_mbps,
+                    "decompress_mbps": r.per_col_decomp_mbps,
+                    "random_mbps": r.per_col_rand_mbps,
+                }
+                for r in rows.values()
+            },
+            indent=2,
+        )
+    )
 
     for f in ("ratio.md", "speed.md", "diff.md"):
         print(f"\n===== {f} =====")

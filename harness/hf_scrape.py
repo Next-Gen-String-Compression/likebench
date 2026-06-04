@@ -49,7 +49,9 @@ def prepare(arg: str, cache_dir: Path, *, scale: str) -> SourceData:
 
     chosen = None
     if want:
-        chosen = next((f for f in files if want in f.get("url", "") or want == f.get("split")), None)
+        chosen = next(
+            (f for f in files if want in f.get("url", "") or want == f.get("split")), None
+        )
         if chosen is None:
             raise ValueError(f"no HF shard matching {want!r} for {repo!r}")
     else:
