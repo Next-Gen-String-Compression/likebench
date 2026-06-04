@@ -56,6 +56,7 @@ async fn run(args: BenchArgs) -> Result<()> {
         (Format::Parquet, Mode::FullQuery) => parquet_full_query(&args, &sql).await?,
         (Format::Vortex, Mode::InMem) => vortex_in_mem(&args, &sql).await?,
         (Format::Vortex, Mode::FullQuery) => vortex_full_query(&args, &sql).await?,
+        (Format::Raw, _) => bail!("bench-datafusion does not support --format raw (.strings)"),
     };
 
     let out = BenchOutput {
@@ -317,6 +318,7 @@ fn tag(args: &BenchArgs, plan: String) -> String {
         Format::Vortex if vortex_pushdown(&plan) => "[vortex-native pushdown]",
         Format::Vortex => "[vortex decode fallback]",
         Format::Parquet => "[parquet baseline]",
+        Format::Raw => "[raw]",
     };
     let first = plan.lines().next().unwrap_or("").trim().to_string();
     format!("{kind} {first}")

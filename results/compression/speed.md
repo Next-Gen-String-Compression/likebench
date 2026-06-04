@@ -2,16 +2,16 @@
 
 | algorithm | source | compress | decompress | random-access |
 |---|---|---|---|---|
-| Dictionary | ported | 507.5 | 2769.1 | 40133.8 |
-| LZ4 | ported | 484.7 | 1819.8 | 3573.0 |
-| Parquet+zstd | new | 365.8 | — | — |
-| Vortex | new | 341.2 | — | — |
-| FSST12 | ported | 195.5 | 1357.7 | 10047.7 |
-| FSST | ported | 170.3 | 1301.9 | 9088.8 |
-| OnPair16 (Rust) | new | 117.6 | 2218.1 | 18003.5 |
-| OnPairMini12 | ported | 107.2 | 1811.2 | 13801.3 |
-| OnPair16 (C++) | ported | 91.4 | 2285.2 | 17528.3 |
-| OnPairMini10 | ported | 78.1 | 1623.6 | 10458.4 |
-| OnPair (Rust) | new | 60.2 | 1744.9 | 18433.1 |
-| OnPairMini14 | ported | 37.6 | 1903.1 | 16043.4 |
-| OnPair (C++) | ported | 37.0 | 1765.7 | 18924.7 |
+| LZ4 | ported | 390.0 | 1496.1 | 2889.9 |
+| Dictionary | ported | 376.8 | 1896.6 | 22408.1 |
+| Parquet+zstd | new | 309.4 | — | — |
+| Vortex | new | 170.0 | — | — |
+| FSST12 | ported | 150.8 | 1101.9 | 6577.1 |
+| FSST | ported | 150.3 | 1026.1 | 6869.4 |
+| OnPair16 (Rust) | new | 91.4 | 1477.5 | 11003.5 |
+| OnPairMini12 | ported | 87.7 | 1491.4 | 10938.3 |
+| OnPair16 (C++) | ported | 67.2 | 1518.5 | 11269.5 |
+| OnPairMini10 | ported | 64.0 | 1314.3 | 8186.3 |
+| OnPair (Rust) | new | 46.6 | 1189.5 | 11463.8 |
+| OnPairMini14 | ported | 30.1 | 1628.4 | 11277.6 |
+| OnPair (C++) | ported | 30.0 | 1271.2 | 11850.4 |
