@@ -20,6 +20,9 @@
 #include "../../external/fsst/fsst.h"
 #include "../../external/fsst12/fsst12.h"
 #include "../../external/lz4/lz4.h"
+#include "../../external/onpair/include/onpair.h"
+#include "../../external/onpair/include/onpair16.h"
+#include "../../external/onpair/include/onpair_mini.h"
 #include "../../external/robin_hood/robin_hood.h"
 
 namespace likebench {
@@ -258,12 +261,51 @@ public:
     size_t decompress_capacity() const override { return max_len_ + 32; }
 };
 
+// ---------------------------------------------------------------------------
+// OnPair (C++) — the algorithm author's C++ implementation, vendored from
+// onpair_cpp. Treated as a *distinct algorithm* from the Rust bench-onpair: same
+// idea, different implementation, so likebench reports both. Covers OnPair,
+// OnPair16 and the OnPairMini<BITS> family.
+// ---------------------------------------------------------------------------
+template <class OP>
+class OnPairCppCodec : public ICodec {
+    OP op_;
+    std::vector<size_t> ends_; // n+1 prefix offsets (size_t for the onpair API)
+    uint64_t max_len_ = 0, uncompressed_ = 0;
+
+public:
+    void compress(const StringColumn &col) override {
+        const size_t n = col.size();
+        ends_.assign(col.offsets.begin(), col.offsets.end());
+        for (size_t i = 0; i < n; ++i)
+            max_len_ = std::max(max_len_, static_cast<uint64_t>(col.length(i)));
+        uncompressed_ = col.total_bytes();
+        op_ = OP(n, uncompressed_);
+        op_.compress_bytes(col.data.data(), ends_);
+    }
+    uint64_t compressed_bytes() const override { return op_.space_used(); }
+    size_t decompress_one(size_t i, uint8_t *out) override {
+        return op_.decompress_string(i, out);
+    }
+    // onpair_cpp requires >= decoded + 16 bytes of slack in the output buffer.
+    size_t decompress_capacity() const override { return max_len_ + 32; }
+};
+
 inline std::unique_ptr<ICodec> make_codec(const std::string &name) {
     if (name == "fsst") return std::make_unique<FsstCodec>();
     if (name == "fsst12") return std::make_unique<Fsst12Codec>();
     if (name == "dictionary" || name == "dict") return std::make_unique<DictionaryCodec>();
     if (name == "lz4") return std::make_unique<Lz4Codec>();
-    throw std::runtime_error("unknown --codec " + name + " (expected fsst|fsst12|dictionary|lz4)");
+    if (name == "onpair-cpp" || name == "onpaircpp")
+        return std::make_unique<OnPairCppCodec<OnPair>>();
+    if (name == "onpair16-cpp" || name == "onpair16cpp")
+        return std::make_unique<OnPairCppCodec<OnPair16>>();
+    if (name == "onpairmini10") return std::make_unique<OnPairCppCodec<OnPairMini<10>>>();
+    if (name == "onpairmini12") return std::make_unique<OnPairCppCodec<OnPairMini<12>>>();
+    if (name == "onpairmini14") return std::make_unique<OnPairCppCodec<OnPairMini<14>>>();
+    throw std::runtime_error(
+        "unknown --codec " + name +
+        " (expected fsst|fsst12|dictionary|lz4|onpair-cpp|onpair16-cpp|onpairmini{10,12,14})");
 }
 
 } // namespace likebench

@@ -115,6 +115,58 @@ formats = ["raw"]
 kinds = ["synthetic"]
 codec = "lz4"
 
+# C++ OnPair (onpair_cpp). A DISTINCT algorithm from the Rust bench-onpair above:
+# same scheme, different implementation, so the table reports both.
+[[binary]]
+name = "bench-onpair-cpp"
+bin = "cpp/build/bench-compress-cpp"
+bin_path = "cpp"
+lang = "cpp"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "onpair-cpp"
+
+[[binary]]
+name = "bench-onpair16-cpp"
+bin = "cpp/build/bench-compress-cpp"
+bin_path = "cpp"
+lang = "cpp"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "onpair16-cpp"
+
+[[binary]]
+name = "bench-onpairmini10"
+bin = "cpp/build/bench-compress-cpp"
+bin_path = "cpp"
+lang = "cpp"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "onpairmini10"
+
+[[binary]]
+name = "bench-onpairmini12"
+bin = "cpp/build/bench-compress-cpp"
+bin_path = "cpp"
+lang = "cpp"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "onpairmini12"
+
+[[binary]]
+name = "bench-onpairmini14"
+bin = "cpp/build/bench-compress-cpp"
+bin_path = "cpp"
+lang = "cpp"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "onpairmini14"
+
 # ---- C++ query engines (later) -- same contract, lang = "cpp" --------------
 # [[binary]]
 # name = "bench-duckdb-native"

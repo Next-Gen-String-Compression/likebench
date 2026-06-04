@@ -24,5 +24,12 @@ add_executable(bench-compress-cpp
     external/fsst/libfsst.cpp
     external/fsst/fsst_avx512.cpp
     external/fsst12/libfsst12.cpp
+    external/onpair/src/onpair.cpp
+    external/onpair/src/onpair16.cpp
+)
+# onpair_cpp headers use #include <robin_hood.h> and sibling headers (lpm.h, …).
+target_include_directories(bench-compress-cpp PRIVATE
+    external/onpair/include
+    external/robin_hood
 )
 target_link_libraries(bench-compress-cpp PRIVATE lz4)
