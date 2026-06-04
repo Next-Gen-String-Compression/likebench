@@ -82,6 +82,8 @@ likebench/
     bench-datafusion/       DataFusion + vortex-datafusion (pushdown vs parquet)
     bench-duckdb/           duckdb crate + LOAD vortex (heavy; disabled by default)
   cpp/                      later: bench-duckdb-native, bench-baseline
+  scripts/
+    build_vortex_duckdb_extension.sh   build the DuckDB `vortex` extension from source
   queries/clickbench.json   mined synthetic specs + real ClickBench LIKE SQL
   data/cache/               downloaded + converted artifacts (gitignored)
   results/                  results.json, table.md, table.csv, metadata.json, plots/
@@ -183,13 +185,38 @@ Deterministic seeded mining, pinned Rust/Python deps, `cargo build --release`.
 |---|---|---|
 | `bench-arrow` | Rust | implemented (decompressed baseline) |
 | `bench-datafusion` | Rust | implemented (DataFusion + vortex-datafusion) |
-| `bench-duckdb` | Rust | implemented; disabled by default (heavy native build + runtime `vortex` community extension) |
+| `bench-duckdb` | Rust | implemented; disabled by default (heavy native build + a locally-built `vortex` extension — see below) |
 | `bench-duckdb-native` | C++ | planned |
 | `bench-baseline` | C++ | planned (hand-rolled FSST decode + `memmem`) |
 
 > **Heads up for reviewers running this:** the `full` scale needs ~14 GB of disk
 > for the download plus the Vortex/Parquet re-encodings. `bench-datafusion`
 > compiles a large dependency tree on first build (DataFusion + Vortex).
-> `bench-duckdb` additionally compiles DuckDB from source and loads the `vortex`
-> community extension at runtime; enable it in `benchmarks.toml` once that
-> extension is available for your platform.
+> `bench-duckdb` additionally compiles DuckDB from source; see the next section
+> for its `vortex` extension requirement.
+
+### Running `bench-duckdb` with Vortex
+
+The DuckDB `vortex` **community** extension (`INSTALL vortex FROM community`)
+lags upstream: at the time of writing it is published only for DuckDB
+v1.2.2–v1.4.2, and even those builds predate the `vortex.variant` array encoding
+emitted by the Vortex ≥ 0.74 writer this repo uses. So on the DuckDB version the
+`duckdb` crate bundles (v1.5.3) the community install **404s**, and on v1.4.x it
+loads but cannot read files written by `convert`. The Parquet path is unaffected.
+
+To run `bench-duckdb`'s Vortex path, build a matching extension from source and
+point the binary at it:
+
+```bash
+ext=$(scripts/build_vortex_duckdb_extension.sh)   # builds duckdb-vortex HEAD (DuckDB 1.5.3 + current Vortex)
+export VORTEX_DUCKDB_EXTENSION="$ext"              # bench-duckdb LOADs this instead of INSTALL FROM community
+# enable bench-duckdb in benchmarks.toml, then:
+python run.py --scale sample --engines bench-duckdb
+```
+
+When `VORTEX_DUCKDB_EXTENSION` is set, `bench-duckdb` opens DuckDB with
+`allow_unsigned_extensions` and `LOAD`s that file; unset, it falls back to the
+community registry. The same build also yields a `duckdb` CLI with the extension
+statically linked (`<build>/release/duckdb`) for ad-hoc `read_vortex(...)`
+queries — including the full ClickBench `LIKE` queries (Q20–Q22), where the
+predicate is pushed into the Vortex scan and beats the Parquet baseline ~5×.

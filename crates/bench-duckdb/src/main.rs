@@ -1,21 +1,23 @@
 //! `bench-duckdb` — DuckDB engine via the `duckdb` crate.
 //!
-//! Parquet path uses `read_parquet`; Vortex path uses the `vortex` community
-//! extension's `read_vortex` (loaded at runtime). A `hits` relation is created
-//! once per run so both synthetic (`FROM hits`) and real SQL work uniformly:
+//! Parquet path uses `read_parquet`; the Vortex path uses `read_vortex` from the
+//! `vortex` extension, loaded at runtime. A `hits` relation is created once per
+//! run so both synthetic (`FROM hits`) and real SQL work uniformly:
 //!
-//!   * `in-mem`     — `CREATE TABLE hits AS SELECT * FROM read_X(...)` (materialize
-//!                    into DuckDB once), then query K×.
-//!   * `full-query` — `CREATE VIEW hits AS SELECT * FROM read_X(...)`, so each
-//!                    query re-scans the file (predicate pushdown applies).
+//! * `in-mem` — `CREATE TABLE hits AS SELECT * FROM read_X(...)` (materialize
+//!   into DuckDB once), then query K×.
+//! * `full-query` — `CREATE VIEW hits AS SELECT * FROM read_X(...)`, so each
+//!   query re-scans the file (predicate pushdown applies).
 //!
 //! NOTE: this binary is disabled by default in `benchmarks.toml`. It compiles
-//! DuckDB from source (the `bundled` feature) and, for the Vortex path, requires
-//! the `vortex` community extension to be installable/loadable on the host.
+//! DuckDB from source (the `bundled` feature). The Vortex path needs the `vortex`
+//! extension; because the community build lags DuckDB (none for 1.5.x), point
+//! `VORTEX_DUCKDB_EXTENSION` at a locally-built `.duckdb_extension` — see
+//! `scripts/build_vortex_duckdb_extension.sh`.
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use duckdb::Connection;
+use duckdb::{Config, Connection};
 
 use bench_core::{checksum, synthetic_to_sql, BenchArgs, BenchOutput, Format, Mode, QuerySpec};
 
@@ -29,15 +31,12 @@ fn main() -> Result<()> {
         QuerySpec::Real(r) => Ok(r.sql.clone()),
     }?;
 
-    let conn = Connection::open_in_memory()?;
+    // allow_unsigned_extensions lets us LOAD a locally-built (unsigned) vortex
+    // extension. See `load_vortex_extension` for why that is the reliable path.
+    let config = Config::default().allow_unsigned_extensions()?;
+    let conn = Connection::open_in_memory_with_flags(config)?;
     if args.format == Format::Vortex {
-        // Community extension; requires network to INSTALL the first time.
-        conn.execute_batch(
-            "SET autoinstall_known_extensions=true; SET autoload_known_extensions=true;",
-        )
-        .ok();
-        conn.execute_batch("INSTALL vortex FROM community; LOAD vortex;")
-            .context("failed to LOAD the duckdb `vortex` community extension")?;
+        load_vortex_extension(&conn)?;
     }
 
     let path = args.input.to_string_lossy().to_string();
@@ -95,6 +94,38 @@ fn main() -> Result<()> {
         iters_ns,
     };
     out.print()
+}
+
+/// Make the `vortex` extension available before a Vortex-format run.
+///
+/// Prefer a locally-built loadable extension pointed to by the
+/// `VORTEX_DUCKDB_EXTENSION` env var (path to a `vortex.duckdb_extension`); this
+/// is the reliable path because the DuckDB *community* build of the extension
+/// lags upstream — there is no published build for DuckDB 1.5.x, and older
+/// builds cannot read files written by current Vortex (the `vortex.variant`
+/// encoding). Build a matching extension from source with
+/// `scripts/build_vortex_duckdb_extension.sh`. If the env var is unset we fall
+/// back to the community registry (works only where a build is published).
+fn load_vortex_extension(conn: &Connection) -> Result<()> {
+    match std::env::var("VORTEX_DUCKDB_EXTENSION") {
+        Ok(path) if !path.is_empty() => {
+            let esc = path.replace('\'', "''");
+            conn.execute_batch(&format!("LOAD '{esc}';"))
+                .with_context(|| format!("failed to LOAD local vortex extension {path:?}"))
+        }
+        _ => {
+            conn.execute_batch(
+                "SET autoinstall_known_extensions=true; SET autoload_known_extensions=true;",
+            )
+            .ok();
+            conn.execute_batch("INSTALL vortex FROM community; LOAD vortex;")
+                .context(
+                    "failed to LOAD the duckdb `vortex` community extension. No community build \
+                 exists for DuckDB 1.5.x; build one from source and point \
+                 VORTEX_DUCKDB_EXTENSION at it (see scripts/build_vortex_duckdb_extension.sh).",
+                )
+        }
+    }
 }
 
 fn count(conn: &Connection, sql: &str) -> Result<u64> {
