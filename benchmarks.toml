@@ -1,0 +1,178 @@
+# Engine manifest. One [[binary]] row per engine.
+#
+# This is the ONLY place the Python harness learns about engines. Adding an
+# engine = drop a crate directory + add a row here. Zero Python changes.
+#
+# Fields:
+#   name      logical engine name, also the cargo package name and the produced
+#             binary name (crates/<name> -> target/release/<name>).
+#   bin_path  path to the crate (Cargo) or build dir, relative to repo root.
+#   lang      "rust" | "cpp"  (informational; how setup.sh builds it)
+#   modes     subset of ["in-mem", "full-query"] the binary supports
+#   formats   subset of ["parquet", "vortex"] the binary supports
+#   kinds     subset of ["synthetic", "real"] query kinds the binary accepts
+#   enabled   optional bool (default true). Set false to skip without deleting.
+#
+# The uniform CLI/JSON contract (see crates/bench-core) means the harness never
+# needs to know which language emitted a binary.
+
+[[binary]]
+name = "bench-arrow"
+bin_path = "crates/bench-arrow"
+lang = "rust"
+modes = ["in-mem"]
+formats = ["parquet"]
+kinds = ["synthetic"]
+# Pure decompressed baseline: decode Parquet -> Arrow, run the strongest
+# native scan kernel (memmem/SIMD substring, starts_with/ends_with).
+
+[[binary]]
+name = "bench-datafusion"
+bin_path = "crates/bench-datafusion"
+lang = "rust"
+modes = ["in-mem", "full-query"]
+formats = ["parquet", "vortex"]
+kinds = ["synthetic", "real"]
+# Vortex pushdown path via vortex-datafusion vs Parquet/Arrow baseline.
+
+[[binary]]
+name = "bench-duckdb"
+bin_path = "crates/bench-duckdb"
+lang = "rust"
+modes = ["in-mem", "full-query"]
+formats = ["parquet", "vortex"]
+kinds = ["synthetic", "real"]
+# duckdb crate with `LOAD vortex`. Heavy native build; see README.
+# Disabled by default so `python run.py` works on a fresh clone without the
+# (multi-minute) DuckDB C++ build and the runtime vortex community extension.
+enabled = false
+
+# ---- Standalone string codecs ----------------------------------------------
+# These engines compress the raw column themselves (no Parquet/Vortex) and read
+# the dependency-free `.strings` file (`formats = ["raw"]`). Several rows share
+# one physical binary via `bin` + `codec`. They decode + run the synthetic
+# matcher, so their result_rows/checksum join the cross-engine correctness gate,
+# and they additionally report compression ratio + encode/decode speed.
+
+# -- bench-onpair (Rust): SpiralDB-adjacent OnPair, the author's onpair_rs port.
+[[binary]]
+name = "bench-onpair"
+bin = "target/release/bench-onpair"
+lang = "rust"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "onpair"
+
+[[binary]]
+name = "bench-onpair16"
+bin = "target/release/bench-onpair"
+lang = "rust"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "onpair16"
+
+# -- bench-compress-cpp (C++): FSST / FSST12 / Dictionary / LZ4, ported from
+#    CompressionBenchmark. One physical binary, codec selected per row.
+[[binary]]
+name = "bench-fsst"
+bin = "cpp/build/bench-compress-cpp"
+bin_path = "cpp"
+lang = "cpp"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "fsst"
+
+[[binary]]
+name = "bench-fsst12"
+bin = "cpp/build/bench-compress-cpp"
+bin_path = "cpp"
+lang = "cpp"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "fsst12"
+
+[[binary]]
+name = "bench-dictionary"
+bin = "cpp/build/bench-compress-cpp"
+bin_path = "cpp"
+lang = "cpp"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "dictionary"
+
+[[binary]]
+name = "bench-lz4"
+bin = "cpp/build/bench-compress-cpp"
+bin_path = "cpp"
+lang = "cpp"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "lz4"
+
+# C++ OnPair (onpair_cpp). A DISTINCT algorithm from the Rust bench-onpair above:
+# same scheme, different implementation, so the table reports both.
+[[binary]]
+name = "bench-onpair-cpp"
+bin = "cpp/build/bench-compress-cpp"
+bin_path = "cpp"
+lang = "cpp"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "onpair-cpp"
+
+[[binary]]
+name = "bench-onpair16-cpp"
+bin = "cpp/build/bench-compress-cpp"
+bin_path = "cpp"
+lang = "cpp"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "onpair16-cpp"
+
+[[binary]]
+name = "bench-onpairmini10"
+bin = "cpp/build/bench-compress-cpp"
+bin_path = "cpp"
+lang = "cpp"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "onpairmini10"
+
+[[binary]]
+name = "bench-onpairmini12"
+bin = "cpp/build/bench-compress-cpp"
+bin_path = "cpp"
+lang = "cpp"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "onpairmini12"
+
+[[binary]]
+name = "bench-onpairmini14"
+bin = "cpp/build/bench-compress-cpp"
+bin_path = "cpp"
+lang = "cpp"
+modes = ["in-mem"]
+formats = ["raw"]
+kinds = ["synthetic"]
+codec = "onpairmini14"
+
+# ---- C++ query engines (later) -- same contract, lang = "cpp" --------------
+# [[binary]]
+# name = "bench-duckdb-native"
+# bin_path = "cpp/bench-duckdb-native"
+# lang = "cpp"
+# modes = ["in-mem", "full-query"]
+# formats = ["parquet", "vortex"]
+# kinds = ["synthetic", "real"]
+# enabled = false

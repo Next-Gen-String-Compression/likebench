@@ -1,0 +1,198 @@
+{
+  "version": 1,
+  "buckets": {
+    "p001": 0.001,
+    "p01": 0.01,
+    "p10": 0.1,
+    "p50": 0.5
+  },
+  "queries": [
+    {
+      "kind": "synthetic",
+      "op": "prefix",
+      "column": "URL",
+      "value": "http:%",
+      "label": "prefix_URL_p001",
+      "selectivity": 0.000427,
+      "selectivity_bucket": "p001"
+    },
+    {
+      "kind": "synthetic",
+      "op": "prefix",
+      "column": "URL",
+      "value": "http://b",
+      "label": "prefix_URL_p01",
+      "selectivity": 0.008967,
+      "selectivity_bucket": "p01"
+    },
+    {
+      "kind": "synthetic",
+      "op": "prefix",
+      "column": "URL",
+      "value": "http://k",
+      "label": "prefix_URL_p10",
+      "selectivity": 0.116784,
+      "selectivity_bucket": "p10"
+    },
+    {
+      "kind": "synthetic",
+      "op": "prefix",
+      "column": "URL",
+      "value": "http:/",
+      "label": "prefix_URL_p50",
+      "selectivity": 0.517519,
+      "selectivity_bucket": "p50"
+    },
+    {
+      "kind": "synthetic",
+      "op": "suffix",
+      "column": "URL",
+      "value": "0&order_by=0",
+      "label": "suffix_URL_p01",
+      "selectivity": 0.010503,
+      "selectivity_bucket": "p01"
+    },
+    {
+      "kind": "synthetic",
+      "op": "suffix",
+      "column": "URL",
+      "value": "3130",
+      "label": "suffix_URL_p10",
+      "selectivity": 0.058984,
+      "selectivity_bucket": "p10"
+    },
+    {
+      "kind": "synthetic",
+      "op": "contains",
+      "column": "URL",
+      "value": "html",
+      "label": "contains_URL_p10",
+      "selectivity": 0.117602,
+      "selectivity_bucket": "p10"
+    },
+    {
+      "kind": "synthetic",
+      "op": "contains",
+      "column": "URL",
+      "value": "https",
+      "label": "contains_URL_p50",
+      "selectivity": 0.482148,
+      "selectivity_bucket": "p50"
+    },
+    {
+      "kind": "synthetic",
+      "op": "expr",
+      "column": "URL",
+      "predicate": {
+        "and": [
+          {
+            "prefix": "http:%"
+          },
+          {
+            "contains": "html"
+          }
+        ]
+      },
+      "label": "expr_URL_prefix_and_contains",
+      "selectivity": 1e-06,
+      "selectivity_bucket": "mixed"
+    },
+    {
+      "kind": "real",
+      "sql": "SELECT count(*) FROM hits WHERE \"URL\" LIKE '%html%'",
+      "column": "URL",
+      "label": "clickbench_like_URL"
+    },
+    {
+      "kind": "synthetic",
+      "op": "prefix",
+      "column": "Title",
+      "value": "\u0431\u0430\u0441\u0441",
+      "label": "prefix_Title_p10",
+      "selectivity": 0.103568,
+      "selectivity_bucket": "p10"
+    },
+    {
+      "kind": "synthetic",
+      "op": "suffix",
+      "column": "Title",
+      "value": "\u0440\u0448\u0435\u0447\u043d\u044b\u043c\u0438",
+      "label": "suffix_Title_p01",
+      "selectivity": 0.021218,
+      "selectivity_bucket": "p01"
+    },
+    {
+      "kind": "synthetic",
+      "op": "suffix",
+      "column": "Title",
+      "value": "\u0434\u0435\u043a\u0441",
+      "label": "suffix_Title_p10",
+      "selectivity": 0.091601,
+      "selectivity_bucket": "p10"
+    },
+    {
+      "kind": "synthetic",
+      "op": "contains",
+      "column": "Title",
+      "value": "komuza40",
+      "label": "contains_Title_p001",
+      "selectivity": 0.000452,
+      "selectivity_bucket": "p001"
+    },
+    {
+      "kind": "synthetic",
+      "op": "contains",
+      "column": "Title",
+      "value": "3DNews",
+      "label": "contains_Title_p01",
+      "selectivity": 0.009778,
+      "selectivity_bucket": "p01"
+    },
+    {
+      "kind": "synthetic",
+      "op": "contains",
+      "column": "Title",
+      "value": "Convent",
+      "label": "contains_Title_p10",
+      "selectivity": 0.112323,
+      "selectivity_bucket": "p10"
+    },
+    {
+      "kind": "synthetic",
+      "op": "multicontains",
+      "column": "Title",
+      "values": [
+        "Convent",
+        "3DNews"
+      ],
+      "mode": "all",
+      "label": "multicontains_Title_all",
+      "selectivity": 0.000966,
+      "selectivity_bucket": "mixed"
+    },
+    {
+      "kind": "synthetic",
+      "op": "expr",
+      "column": "Title",
+      "predicate": {
+        "and": [
+          {
+            "prefix": "\u0431\u0430\u0441\u0441"
+          },
+          {
+            "contains": "komuza40"
+          }
+        ]
+      },
+      "label": "expr_Title_prefix_and_contains",
+      "selectivity": 0.0,
+      "selectivity_bucket": "mixed"
+    },
+    {
+      "kind": "real",
+      "sql": "SELECT count(*) FROM hits WHERE \"Title\" LIKE '%3DNews%'",
+      "column": "Title",
+      "label": "clickbench_like_Title"
+    }
+  ]
+}

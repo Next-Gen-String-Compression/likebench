@@ -1,0 +1,17 @@
+[package]
+name = "bench-onpair"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+# `bench-onpair` is a standalone string-codec engine: it reads the dependency-free
+# `.strings` column, compresses it with SpiralDB-adjacent OnPair (the Rust port by
+# the algorithm's author), then for each iteration decodes + runs the synthetic
+# matcher, so its `result_rows`/checksum line up with every other likebench engine.
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+bench-core.workspace = true
+
+# OnPair is git-only (not published to crates.io). Pinned for reproducibility.
+onpair_rs = { git = "https://github.com/gargiulofrancesco/onpair_rs", rev = "ac663abe92ef3de26a65d9684e78f2aea28366ff" }

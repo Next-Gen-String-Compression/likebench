@@ -1,0 +1,20 @@
+[package]
+name = "bench-arrow"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Decompressed baseline: decode Parquet to Arrow, run the strongest native scan kernel."
+
+[[bin]]
+name = "bench-arrow"
+path = "src/main.rs"
+
+[dependencies]
+bench-core.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+arrow.workspace = true
+parquet.workspace = true
+memchr.workspace = true

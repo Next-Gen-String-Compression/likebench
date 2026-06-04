@@ -1,0 +1,36 @@
+[project]
+name = "likebench"
+version = "0.1.0"
+description = "ClickBench LIKE-pushdown benchmark: LIKE-family predicates on compressed (Vortex/FSST) vs decompressed (Arrow) columnar string data."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "polars>=1.12",
+    "matplotlib>=3.8",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+# Needed only for `--dataset duckdb:<path>` (export VARCHAR columns to Parquet).
+duckdb = [
+    "duckdb>=1.1",
+]
+
+# This is an application, not a library. We only use the [project] table so
+# `uv sync` can build a locked, reproducible virtual environment. There is no
+# build backend and nothing is installed as an importable wheel; the harness is
+# run as scripts (`python run.py`).
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

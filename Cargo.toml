@@ -1,0 +1,48 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/bench-core",
+    "crates/convert",
+    "crates/bench-arrow",
+    "crates/bench-datafusion",
+    "crates/bench-duckdb",
+    "crates/bench-onpair",
+]
+
+[workspace.package]
+edition = "2021"
+license = "Apache-2.0"
+rust-version = "1.91"
+
+# Pinned, coherent versions: vortex 0.74 + vortex-datafusion 0.74 (which needs
+# datafusion 53) all bridge to arrow/parquet 58.
+[workspace.dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+memchr = "2"
+
+arrow = "58"
+arrow-array = "58"
+arrow-schema = "58"
+parquet = "58"
+
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "io-util"] }
+futures = "0.3"
+
+vortex = { version = "0.74", features = ["files", "tokio", "zstd", "unstable_encodings"] }
+vortex-array = "0.74"
+vortex-file = { version = "0.74", features = ["zstd", "unstable_encodings"] }
+vortex-btrblocks = { version = "0.74", features = ["zstd", "unstable_encodings"] }
+vortex-datafusion = "0.74"
+datafusion = "53"
+datafusion-common = "53"
+
+duckdb = { version = "1.10503", features = ["bundled"] }
+
+bench-core = { path = "crates/bench-core" }
+
+[profile.release]
+opt-level = 3
+debug = false

@@ -1,0 +1,10 @@
+# `gxhash` (pulled in transitively by OnPair's `ptr_hash` dependency) requires
+# AES + SSE2 intrinsics, so we enable exactly those — portable across every
+# x86-64 CPU and CI runner. We deliberately do NOT use `target-cpu=native`: it
+# makes rustc itself (and proc-macro .so's) execute host-detected instructions
+# that some virtualized CPUs/CI runners advertise but trap on, crashing the
+# build with SIGILL. For a local perf run on trusted hardware you can still
+# override with `RUSTFLAGS="-C target-cpu=native"`.
+[build]
+rustflags = ["-C", "target-feature=+aes,+sse2"]
+
