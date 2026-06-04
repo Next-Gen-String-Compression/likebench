@@ -31,10 +31,10 @@ parquet = "58"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "io-util"] }
 futures = "0.3"
 
-vortex = { version = "0.74", features = ["files", "tokio"] }
+vortex = { version = "0.74", features = ["files", "tokio", "zstd", "unstable_encodings"] }
 vortex-array = "0.74"
-vortex-file = "0.74"
-vortex-btrblocks = "0.74"
+vortex-file = { version = "0.74", features = ["zstd", "unstable_encodings"] }
+vortex-btrblocks = { version = "0.74", features = ["zstd", "unstable_encodings"] }
 vortex-datafusion = "0.74"
 datafusion = "53"
 datafusion-common = "53"

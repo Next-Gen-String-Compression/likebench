@@ -3465,6 +3465,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfe21416a02c693fb9f980befcb230ecc70b0b3d1cc4abf88b9675c4c1457f0c"
 
 [[package]]
+name = "onpair"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7f54ca0079320b4b43a7502822b8a2e8a2c713adb7fc65ae4e65f940921a7eb"
+dependencies = [
+ "hashbrown 0.16.1",
+ "rand 0.9.4",
+]
+
+[[package]]
 name = "onpair_rs"
 version = "0.1.0"
 source = "git+https://github.com/gargiulofrancesco/onpair_rs?rev=ac663abe92ef3de26a65d9684e78f2aea28366ff#ac663abe92ef3de26a65d9684e78f2aea28366ff"
@@ -5091,6 +5101,7 @@ dependencies = [
  "vortex-sequence",
  "vortex-session",
  "vortex-sparse",
+ "vortex-tensor",
  "vortex-utils",
  "vortex-zigzag",
  "vortex-zstd",
@@ -5201,10 +5212,12 @@ dependencies = [
  "vortex-fastlanes",
  "vortex-fsst",
  "vortex-mask",
+ "vortex-onpair",
  "vortex-pco",
  "vortex-runend",
  "vortex-sequence",
  "vortex-sparse",
+ "vortex-tensor",
  "vortex-utils",
  "vortex-zigzag",
  "vortex-zstd",
@@ -5383,12 +5396,14 @@ dependencies = [
  "vortex-layout",
  "vortex-mask",
  "vortex-metrics",
+ "vortex-onpair",
  "vortex-pco",
  "vortex-runend",
  "vortex-scan",
  "vortex-sequence",
  "vortex-session",
  "vortex-sparse",
+ "vortex-tensor",
  "vortex-utils",
  "vortex-zigzag",
  "vortex-zstd",
@@ -5533,6 +5548,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "vortex-onpair"
+version = "0.74.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a59373c64284065656b417a99677a9fd1633ce3c3da1068d8df1d918f114d1eb"
+dependencies = [
+ "memchr",
+ "num-traits",
+ "onpair",
+ "prost",
+ "vortex-array",
+ "vortex-buffer",
+ "vortex-error",
+ "vortex-mask",
+ "vortex-session",
+]
+
+[[package]]
 name = "vortex-pco"
 version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5635,6 +5667,27 @@ dependencies = [
  "vortex-error",
  "vortex-mask",
  "vortex-session",
+]
+
+[[package]]
+name = "vortex-tensor"
+version = "0.74.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0a4c8dc67205972f3a8a4441d2627da17e75ac623a4e591c9e049c4d32fdf230"
+dependencies = [
+ "arrow-array",
+ "arrow-schema",
+ "half",
+ "itertools 0.14.0",
+ "num-traits",
+ "prost",
+ "vortex-array",
+ "vortex-buffer",
+ "vortex-compressor",
+ "vortex-error",
+ "vortex-fastlanes",
+ "vortex-session",
+ "vortex-utils",
 ]
 
 [[package]]
