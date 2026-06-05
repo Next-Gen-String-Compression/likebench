@@ -32,9 +32,10 @@ jobs:
       - name: Pytest
         run: uv run --extra dev pytest
 
-  # Rust contract crate: format, clippy, build, test.
-  rust-core:
-    name: rust (bench-core)
+  # Rust workspace: format, clippy, build, test. Exclude heavy crates (the
+  # Vortex tree) with `--workspace --exclude <crate>` as they land in later layers.
+  rust:
+    name: rust
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +44,8 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
-      - run: cargo clippy -p bench-core --release -- -D warnings
-      - run: cargo build -p bench-core --release
-      - run: cargo test -p bench-core --release
+      - run: cargo clippy --workspace --release -- -D warnings
+      - run: cargo build --workspace --release
+      - run: cargo test --workspace --release
+      - name: tpch-gen generates a table
+        run: ./target/release/tpch-gen --table lineitem --scale 0.01 --output /tmp/li.parquet
