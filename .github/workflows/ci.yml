@@ -48,3 +48,13 @@ jobs:
       - run: cargo test -p bench-core --release
       - name: tpch-gen generates a table
         run: ./target/release/tpch-gen --table lineitem --scale 0.01 --output /tmp/li.parquet
+
+  # Heavy crates: convert + bench-datafusion pull the DataFusion + Vortex tree.
+  rust-engine:
+    name: rust (convert + datafusion, heavy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p convert -p bench-datafusion --release

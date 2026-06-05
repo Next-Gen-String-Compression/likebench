@@ -1,0 +1,24 @@
+# Engine manifest. One [[binary]] row per engine.
+#
+# This is the ONLY place the Python harness learns about engines. Adding an
+# engine = drop a crate directory + add a row here. Zero Python changes.
+#
+# Fields:
+#   name      logical engine name (also the cargo package / produced binary).
+#   bin_path  path to the crate, relative to repo root.
+#   lang      "rust" | "cpp"
+#   modes     subset of ["in-mem", "full-query"]
+#   formats   subset of ["parquet", "vortex", "raw"]
+#   kinds     subset of ["synthetic", "real"]
+#   enabled   optional bool (default true).
+#   bin       optional explicit executable path (lets rows share one binary).
+#   codec     optional `--codec` selector passed to the binary.
+
+[[binary]]
+name = "bench-datafusion"
+bin_path = "crates/bench-datafusion"
+lang = "rust"
+modes = ["in-mem", "full-query"]
+formats = ["parquet", "vortex"]
+kinds = ["synthetic", "real"]
+# Vortex pushdown path via vortex-datafusion vs the Parquet/Arrow baseline.

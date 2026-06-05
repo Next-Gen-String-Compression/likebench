@@ -3,6 +3,8 @@ resolver = "2"
 members = [
     "crates/bench-core",
     "crates/tpch-gen",
+    "crates/convert",
+    "crates/bench-datafusion",
 ]
 
 [workspace.package]

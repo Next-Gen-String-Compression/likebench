@@ -1,0 +1,24 @@
+[package]
+name = "bench-datafusion"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "DataFusion engine: Parquet baseline vs Vortex pushdown via vortex-datafusion."
+
+[[bin]]
+name = "bench-datafusion"
+path = "src/main.rs"
+
+[dependencies]
+bench-core.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+arrow.workspace = true
+tokio.workspace = true
+futures.workspace = true
+datafusion.workspace = true
+datafusion-common.workspace = true
+vortex.workspace = true
+vortex-datafusion.workspace = true
