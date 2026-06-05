@@ -7,7 +7,11 @@
 //! This crate centralizes the three things that MUST agree across engines:
 //!   * the [`BenchOutput`] JSON shape,
 //!   * the [`checksum`] used for the cross-engine correctness gate, and
-//!   * how a synthetic op becomes a correct, escaped `LIKE` pattern / predicate.
+//!   * the predicate grammar [`Pred`] — a small AST (`prefix`/`suffix`/
+//!     `contains`/`multi-contains`). SQL engines *convert* it to a `LIKE` clause
+//!     ([`Pred::to_sql`]); scan engines (and the C++ codecs) *walk* it directly
+//!     ([`Matcher`]). The AST is the source of truth — `LIKE` is only ever
+//!     generated, never parsed back.
 
 use std::io::Read;
 use std::path::PathBuf;
@@ -151,14 +155,16 @@ impl QuerySpec {
 
     pub fn label(&self) -> String {
         match self {
-            QuerySpec::Synthetic(s) => s.label.clone().unwrap_or_else(|| s.op.clone()),
+            QuerySpec::Synthetic(s) => s.label.clone().unwrap_or_else(|| s.op_label()),
             QuerySpec::Real(r) => r.label.clone().unwrap_or_else(|| "real".to_string()),
         }
     }
 
+    /// The op tag for grouping/plots (e.g. `prefix`, `multi-contains`); see
+    /// [`Pred::op`]. `None` for real specs.
     pub fn op(&self) -> Option<String> {
         match self {
-            QuerySpec::Synthetic(s) => Some(s.op.clone()),
+            QuerySpec::Synthetic(s) => Some(s.op_label()),
             QuerySpec::Real(_) => None,
         }
     }
@@ -173,19 +179,54 @@ impl QuerySpec {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct SyntheticSpec {
-    pub op: String,
     pub column: String,
-    #[serde(default)]
-    pub value: Option<String>,
-    #[serde(default)]
-    pub values: Option<Vec<String>>,
-    /// "all" (AND) or "any" (OR) for multicontains.
-    #[serde(default)]
-    pub mode: Option<String>,
-    #[serde(default)]
-    pub predicate: Option<Predicate>,
+    /// The predicate AST to evaluate against `column`.
+    pub predicate: Pred,
     #[serde(default)]
     pub label: Option<String>,
+}
+
+/// The predicate grammar (AST) — the source of truth for both the SQL path
+/// ([`Pred::to_sql`]) and the scan path ([`Matcher::from_pred`]). Internally
+/// tagged on `op`:
+///
+/// ```json
+/// {"op": "prefix",         "value":  "http"}
+/// {"op": "suffix",         "value":  ".com"}
+/// {"op": "contains",       "value":  "google"}
+/// {"op": "multi-contains", "values": ["a", "b"]}
+/// ```
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "op", rename_all = "kebab-case")]
+pub enum Pred {
+    /// `col LIKE 'value%'` — `value` is a prefix.
+    Prefix { value: String },
+    /// `col LIKE '%value'` — `value` is a suffix.
+    Suffix { value: String },
+    /// `col LIKE '%value%'` — `value` is a substring.
+    Contains { value: String },
+    /// `col LIKE '%a%b%…%'` — each value appears, in order (match `a`, then `b`
+    /// after it, …). A single ordered pattern, *not* an AND of substrings.
+    MultiContains { values: Vec<String> },
+}
+
+impl Pred {
+    /// The op tag (`prefix`/`suffix`/`contains`/`multi-contains`).
+    pub fn op(&self) -> &'static str {
+        match self {
+            Pred::Prefix { .. } => "prefix",
+            Pred::Suffix { .. } => "suffix",
+            Pred::Contains { .. } => "contains",
+            Pred::MultiContains { .. } => "multi-contains",
+        }
+    }
+}
+
+impl SyntheticSpec {
+    /// The op label for grouping/plots (see [`Pred::op`]).
+    pub fn op_label(&self) -> String {
+        self.predicate.op().to_string()
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -197,132 +238,54 @@ pub struct RealSpec {
     pub label: Option<String>,
 }
 
-/// A composite predicate for `op == "expr"`: exactly one of `and`/`or` is set.
-#[derive(Debug, Clone, Deserialize)]
-pub struct Predicate {
-    #[serde(default)]
-    pub and: Option<Vec<Term>>,
-    #[serde(default)]
-    pub or: Option<Vec<Term>>,
-}
-
-/// A single term of a composite predicate: exactly one of these is set.
-#[derive(Debug, Clone, Deserialize)]
-pub struct Term {
-    #[serde(default)]
-    pub prefix: Option<String>,
-    #[serde(default)]
-    pub suffix: Option<String>,
-    #[serde(default)]
-    pub contains: Option<String>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TermKind {
-    Prefix,
-    Suffix,
-    Contains,
-}
-
-impl Term {
-    pub fn parse(&self) -> Result<(TermKind, &str)> {
-        match (&self.prefix, &self.suffix, &self.contains) {
-            (Some(p), None, None) => Ok((TermKind::Prefix, p)),
-            (None, Some(s), None) => Ok((TermKind::Suffix, s)),
-            (None, None, Some(c)) => Ok((TermKind::Contains, c)),
-            _ => bail!("predicate term must have exactly one of prefix/suffix/contains"),
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
-// Compiled predicate (for engines that scan strings directly, e.g. bench-arrow)
+// Matcher: the AST compiled to native string kernels, for engines that scan
+// decompressed strings directly (e.g. bench-arrow; the C++ codecs mirror this).
+// Built straight from the [`Pred`] AST — there is no LIKE parsing.
 // ---------------------------------------------------------------------------
 
-/// A parsed predicate ready to evaluate against a `&str`.
+/// A predicate compiled to native string kernels.
 #[derive(Debug, Clone)]
 pub enum Matcher {
     Prefix(String),
     Suffix(String),
     Contains(String),
-    Multi {
-        values: Vec<String>,
-        all: bool,
-    },
-    Expr {
-        terms: Vec<(TermKind, String)>,
-        all: bool,
-    },
+    /// Each value occurs, in order — the scan equivalent of `LIKE '%a%b%…%'`.
+    MultiContains(Vec<String>),
 }
 
 impl Matcher {
     pub fn from_spec(spec: &SyntheticSpec) -> Result<Matcher> {
-        let val = || -> Result<String> {
-            spec.value
-                .clone()
-                .with_context(|| format!("op {:?} requires `value`", spec.op))
-        };
-        Ok(match spec.op.as_str() {
-            "prefix" => Matcher::Prefix(val()?),
-            "suffix" => Matcher::Suffix(val()?),
-            "contains" => Matcher::Contains(val()?),
-            "multicontains" => {
-                let values = spec
-                    .values
-                    .clone()
-                    .context("op multicontains requires `values`")?;
-                let all = spec.mode.as_deref() != Some("any");
-                Matcher::Multi { values, all }
-            }
-            "expr" => {
-                let pred = spec
-                    .predicate
-                    .as_ref()
-                    .context("op expr requires `predicate`")?;
-                let (terms_raw, all) = match (&pred.and, &pred.or) {
-                    (Some(t), None) => (t, true),
-                    (None, Some(t)) => (t, false),
-                    _ => bail!("expr predicate must have exactly one of and/or"),
-                };
-                let mut terms = Vec::new();
-                for t in terms_raw {
-                    let (k, v) = t.parse()?;
-                    terms.push((k, v.to_string()));
-                }
-                Matcher::Expr { terms, all }
-            }
-            other => bail!("unknown synthetic op {other:?}"),
-        })
+        Ok(Matcher::from_pred(&spec.predicate))
     }
 
-    /// Reference implementation using std string ops (used in tests; the hot
-    /// path in bench-arrow uses prebuilt `memchr::memmem` finders).
+    pub fn from_pred(pred: &Pred) -> Matcher {
+        match pred {
+            Pred::Prefix { value } => Matcher::Prefix(value.clone()),
+            Pred::Suffix { value } => Matcher::Suffix(value.clone()),
+            Pred::Contains { value } => Matcher::Contains(value.clone()),
+            Pred::MultiContains { values } => Matcher::MultiContains(values.clone()),
+        }
+    }
+
+    /// Reference implementation using std string ops + `memchr` (the hot path in
+    /// bench-arrow prebuilds `memchr::memmem` finders from the same kernels).
     pub fn matches(&self, s: &str) -> bool {
         match self {
             Matcher::Prefix(p) => s.starts_with(p.as_str()),
             Matcher::Suffix(p) => s.ends_with(p.as_str()),
             Matcher::Contains(p) => memchr::memmem::find(s.as_bytes(), p.as_bytes()).is_some(),
-            Matcher::Multi { values, all } => {
-                let hit = |v: &String| memchr::memmem::find(s.as_bytes(), v.as_bytes()).is_some();
-                if *all {
-                    values.iter().all(hit)
-                } else {
-                    values.iter().any(hit)
-                }
-            }
-            Matcher::Expr { terms, all } => {
-                let hit = |(k, v): &(TermKind, String)| match k {
-                    TermKind::Prefix => s.starts_with(v.as_str()),
-                    TermKind::Suffix => s.ends_with(v.as_str()),
-                    TermKind::Contains => {
-                        memchr::memmem::find(s.as_bytes(), v.as_bytes()).is_some()
+            // `%a%b%…%`: find each value in order, each after the previous match.
+            Matcher::MultiContains(values) => {
+                let bytes = s.as_bytes();
+                let mut start = 0usize;
+                for v in values {
+                    match memchr::memmem::find(&bytes[start..], v.as_bytes()) {
+                        Some(pos) => start += pos + v.len(),
+                        None => return false,
                     }
-                };
-                if *all {
-                    terms.iter().all(hit)
-                } else {
-                    terms.iter().any(hit)
                 }
+                true
             }
         }
     }
@@ -332,8 +295,9 @@ impl Matcher {
 // LIKE escaping + SQL building (for engines that go through SQL: DF, DuckDB)
 // ---------------------------------------------------------------------------
 
-/// Escape the LIKE metacharacters `\`, `%`, `_` in a literal value, so that the
-/// value is matched verbatim. Pair with `ESCAPE '\'`.
+/// Escape the LIKE metacharacters `\`, `%`, `_` in a *literal* value, so that
+/// the value matches verbatim once wrapped in wildcards. Used by [`Pred::to_sql`]
+/// (e.g. `escape_like("a%b") -> "a\\%b"`). Pair with `ESCAPE '\'`.
 pub fn escape_like(value: &str) -> String {
     let mut out = String::with_capacity(value.len() + 8);
     for c in value.chars() {
@@ -352,71 +316,41 @@ fn sql_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
 }
 
-/// `col LIKE '<wildcarded escaped value>' ESCAPE '\'` for one term kind.
-fn term_sql(col: &str, kind: TermKind, value: &str) -> String {
-    let esc = escape_like(value);
-    let pat = match kind {
-        TermKind::Prefix => format!("{esc}%"),
-        TermKind::Suffix => format!("%{esc}"),
-        TermKind::Contains => format!("%{esc}%"),
-    };
-    format!("\"{col}\" LIKE {} ESCAPE '\\'", sql_quote(&pat))
+/// `"col" LIKE '<pattern>' ESCAPE '\'` for one LIKE pattern.
+fn like_sql(col: &str, pattern: &str) -> String {
+    format!("\"{col}\" LIKE {} ESCAPE '\\'", sql_quote(pattern))
 }
 
-/// Build a `SELECT count(*) FROM <table> WHERE <predicate>` for a synthetic op.
-///
-/// Each engine adds wildcards + escapes here (identically) so cross-engine
-/// checksums agree regardless of which kernel actually runs underneath.
+impl Pred {
+    /// Convert the AST into a SQL predicate over `col` as a single
+    /// `LIKE '<pattern>' ESCAPE '\'`. Wildcards are added and the literal is
+    /// escaped here, so every SQL engine builds the identical clause and a scan
+    /// engine's [`Matcher`] result agrees with it.
+    pub fn to_sql(&self, col: &str) -> String {
+        match self {
+            Pred::Prefix { value } => like_sql(col, &format!("{}%", escape_like(value))),
+            Pred::Suffix { value } => like_sql(col, &format!("%{}", escape_like(value))),
+            Pred::Contains { value } => like_sql(col, &format!("%{}%", escape_like(value))),
+            // `%a%b%…%`: escaped values joined by `%`, wrapped in `%…%`.
+            Pred::MultiContains { values } => {
+                let joined = values
+                    .iter()
+                    .map(|v| escape_like(v))
+                    .collect::<Vec<_>>()
+                    .join("%");
+                like_sql(col, &format!("%{joined}%"))
+            }
+        }
+    }
+}
+
+/// Build a `SELECT count(*) FROM <table> WHERE <predicate>` for a synthetic
+/// query, by converting its AST via [`Pred::to_sql`].
 pub fn synthetic_to_sql(spec: &SyntheticSpec, table: &str) -> Result<String> {
-    let col = &spec.column;
-    let pred = match spec.op.as_str() {
-        "prefix" => term_sql(
-            col,
-            TermKind::Prefix,
-            spec.value.as_deref().context("value")?,
-        ),
-        "suffix" => term_sql(
-            col,
-            TermKind::Suffix,
-            spec.value.as_deref().context("value")?,
-        ),
-        "contains" => term_sql(
-            col,
-            TermKind::Contains,
-            spec.value.as_deref().context("value")?,
-        ),
-        "multicontains" => {
-            let values = spec.values.as_ref().context("values")?;
-            let joiner = if spec.mode.as_deref() == Some("any") {
-                " OR "
-            } else {
-                " AND "
-            };
-            values
-                .iter()
-                .map(|v| term_sql(col, TermKind::Contains, v))
-                .collect::<Vec<_>>()
-                .join(joiner)
-        }
-        "expr" => {
-            let pred = spec.predicate.as_ref().context("predicate")?;
-            let (terms, joiner) = match (&pred.and, &pred.or) {
-                (Some(t), None) => (t, " AND "),
-                (None, Some(t)) => (t, " OR "),
-                _ => bail!("expr predicate must have exactly one of and/or"),
-            };
-            terms
-                .iter()
-                .map(|t| {
-                    let (k, v) = t.parse()?;
-                    Ok(term_sql(col, k, v))
-                })
-                .collect::<Result<Vec<_>>>()?
-                .join(joiner)
-        }
-        other => bail!("unknown synthetic op {other:?}"),
-    };
-    Ok(format!("SELECT count(*) FROM {table} WHERE {pred}"))
+    Ok(format!(
+        "SELECT count(*) FROM {table} WHERE {}",
+        spec.predicate.to_sql(&spec.column)
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -622,49 +556,116 @@ mod tests {
         assert_eq!(escape_like("a%b_c\\d"), "a\\%b\\_c\\\\d");
     }
 
-    #[test]
-    fn synthetic_contains_sql() {
-        let spec = SyntheticSpec {
-            op: "contains".into(),
-            column: "URL".into(),
-            value: Some("a%b".into()),
-            values: None,
-            mode: None,
-            predicate: None,
+    fn syn(column: &str, predicate: Pred) -> SyntheticSpec {
+        SyntheticSpec {
+            column: column.into(),
+            predicate,
             label: None,
-        };
-        let sql = synthetic_to_sql(&spec, "hits").unwrap();
+        }
+    }
+
+    #[test]
+    fn pred_to_sql_per_op() {
+        // contains, with a literal `%` in the value -> escaped, wildcards added.
         assert_eq!(
-            sql,
+            synthetic_to_sql(
+                &syn(
+                    "URL",
+                    Pred::Contains {
+                        value: "a%b".into()
+                    }
+                ),
+                "hits"
+            )
+            .unwrap(),
             "SELECT count(*) FROM hits WHERE \"URL\" LIKE '%a\\%b%' ESCAPE '\\'"
+        );
+        assert_eq!(
+            synthetic_to_sql(
+                &syn(
+                    "URL",
+                    Pred::Prefix {
+                        value: "http".into()
+                    }
+                ),
+                "hits"
+            )
+            .unwrap(),
+            "SELECT count(*) FROM hits WHERE \"URL\" LIKE 'http%' ESCAPE '\\'"
+        );
+        // multi-contains -> one ordered `%a%b%` pattern (not AND/OR of clauses).
+        let multi = synthetic_to_sql(
+            &syn(
+                "URL",
+                Pred::MultiContains {
+                    values: vec!["a".into(), "b".into()],
+                },
+            ),
+            "hits",
+        )
+        .unwrap();
+        assert_eq!(
+            multi,
+            "SELECT count(*) FROM hits WHERE \"URL\" LIKE '%a%b%' ESCAPE '\\'"
         );
     }
 
     #[test]
     fn matcher_semantics() {
-        let m = Matcher::Contains("oo".into());
-        assert!(m.matches("food"));
-        assert!(!m.matches("bar"));
-        let any = Matcher::Multi {
-            values: vec!["x".into(), "y".into()],
-            all: false,
-        };
-        assert!(any.matches("axe"));
-        let all = Matcher::Multi {
-            values: vec!["a".into(), "z".into()],
-            all: true,
-        };
-        assert!(!all.matches("axe"));
+        assert!(Matcher::from_pred(&Pred::Contains { value: "oo".into() }).matches("food"));
+        assert!(!Matcher::from_pred(&Pred::Prefix {
+            value: "htt".into()
+        })
+        .matches("food"));
+        assert!(Matcher::from_pred(&Pred::Suffix { value: "od".into() }).matches("food"));
+
+        // `%a%b%`: a then b, in order.
+        let m = Matcher::from_pred(&Pred::MultiContains {
+            values: vec!["a".into(), "b".into()],
+        });
+        assert!(m.matches("xaybz")); // a … then b
+        assert!(m.matches("ab"));
+        assert!(!m.matches("xbya")); // b before a -> no ordered match
+        assert!(!m.matches("a")); // missing b
     }
 
     #[test]
-    fn spec_parsing_ignores_unknown_fields() {
+    fn op_label_is_the_ast_tag() {
+        assert_eq!(
+            syn("URL", Pred::Prefix { value: "h".into() }).op_label(),
+            "prefix"
+        );
+        assert_eq!(
+            syn("URL", Pred::Contains { value: "h".into() }).op_label(),
+            "contains"
+        );
+        assert_eq!(
+            syn(
+                "URL",
+                Pred::MultiContains {
+                    values: vec!["a".into()],
+                },
+            )
+            .op_label(),
+            "multi-contains"
+        );
+    }
+
+    #[test]
+    fn spec_parses_ast_and_ignores_unknown_fields() {
         let spec = QuerySpec::parse(
-            r#"{"kind":"synthetic","op":"prefix","column":"URL","value":"http",
+            r#"{"kind":"synthetic","column":"URL","predicate":{"op":"prefix","value":"http"},
                 "label":"l","selectivity":0.1,"selectivity_bucket":"p10"}"#,
         )
         .unwrap();
         assert_eq!(spec.op().as_deref(), Some("prefix"));
         assert_eq!(spec.column().as_deref(), Some("URL"));
+
+        let multi = QuerySpec::parse(
+            r#"{"kind":"synthetic","column":"URL",
+                "predicate":{"op":"multi-contains","values":["a","b"]}}"#,
+        )
+        .unwrap();
+        assert_eq!(multi.op().as_deref(), Some("multi-contains"));
     }
 }

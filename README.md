@@ -20,10 +20,14 @@ bench-<engine> --format parquet|vortex|raw --input <path> \
 ```
 
 The harness reads one manifest (`benchmarks.toml`) to learn which engines exist;
-adding an engine is "drop a crate + add a row". Query specs are self-describing
-(they encode the *intent*, e.g. `contains "google"`, not a raw `%google%`), so a
-decompressed baseline can use its strongest kernel and a compressed engine can
-push the predicate down — and a shared checksum gates cross-engine correctness.
+adding an engine is "drop a crate + add a row". A synthetic query spec carries a
+small predicate **AST** over a column — `prefix` / `suffix` / `contains`, or a
+`multi-contains` (`%a%b%…%` — each value in order). The AST is the source of
+truth: SQL engines *convert* it to `... LIKE '<pattern>' ESCAPE '\'` (escaping +
+wildcards added in one place), while scan engines (e.g. bench-arrow) and the C++
+codecs *walk* it directly with native kernels (`starts_with`/`ends_with`/ordered
+`memmem`). Nothing parses `LIKE` back, both sides evaluate the identical
+predicate, and a shared checksum gates cross-engine correctness.
 
 ## Layout (built up over the PR stack)
 
