@@ -34,7 +34,7 @@ jobs:
 
   # Light Rust crates: format, clippy, build, test (fast — no Vortex tree).
   rust-light:
-    name: rust (core + tpch-gen)
+    name: rust
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
