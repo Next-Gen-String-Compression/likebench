@@ -32,9 +32,9 @@ jobs:
       - name: Pytest
         run: uv run --extra dev pytest
 
-  # Rust contract crate: format, clippy, build, test.
-  rust-core:
-    name: rust (bench-core)
+  # Light Rust crates: format, clippy, build, test (fast — no Vortex tree).
+  rust-light:
+    name: rust (core + tpch-gen)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +43,8 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
-      - run: cargo clippy -p bench-core --release -- -D warnings
-      - run: cargo build -p bench-core --release
+      - run: cargo clippy -p bench-core -p tpch-gen --release -- -D warnings
+      - run: cargo build -p bench-core -p tpch-gen --release
       - run: cargo test -p bench-core --release
+      - name: tpch-gen generates a table
+        run: ./target/release/tpch-gen --table lineitem --scale 0.01 --output /tmp/li.parquet

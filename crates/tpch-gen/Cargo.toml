@@ -1,0 +1,22 @@
+[package]
+name = "tpch-gen"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Offline, deterministic TPC-H data source: generate a string-heavy table to Parquet via tpchgen-arrow."
+
+[[bin]]
+name = "tpch-gen"
+path = "src/main.rs"
+
+# NOTE: tpchgen-arrow pins arrow 57, while the Vortex crates (convert,
+# bench-datafusion) use arrow 58. tpch-gen is a standalone binary that never
+# links against those crates, so the two arrow versions coexist in the lockfile
+# without conflict.
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+tpchgen = "2.0"
+tpchgen-arrow = "2.0"
+arrow = "57"
+parquet = "57"
